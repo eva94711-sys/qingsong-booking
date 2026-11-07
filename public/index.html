@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>青松物理治療所 - 線上預約掛號</title>
+  
+  <!-- Tailwind CSS & Lucide Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            pine: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              200: '#bbf7d0',
+              300: '#86efac',
+              400: '#4ade80',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+              800: '#166534',
+              900: '#14532d',
+              950: '#052e16'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    .pb-safe {
+      padding-bottom: env(safe-area-inset-bottom, 16px);
+    }
+    .hide-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans antialiased selection:bg-pine-200">
+
+  <!-- Responsive App Container: spacious elegant card on desktop (max-w-5xl), full width on mobile -->
+  <div class="max-w-5xl mx-auto min-h-screen bg-white shadow-xl flex flex-col relative pb-24 md:pb-12 md:my-6 md:rounded-3xl md:border md:border-slate-200 overflow-hidden">
+
+    <!-- Top Header -->
+    <header class="bg-gradient-to-r from-pine-900 via-pine-800 to-pine-700 text-white px-4 md:px-6 py-3.5 sticky top-0 z-40 shadow-sm flex items-center justify-between gap-3">
+      <div class="flex items-center space-x-2.5 flex-shrink-0">
+        <div class="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center border border-white/20 shadow-sm">
+          <i data-lucide="trees" class="w-5 h-5 text-pine-200"></i>
+        </div>
+        <div>
+          <h1 class="text-base md:text-lg font-bold tracking-tight whitespace-nowrap">青松物理治療所</h1>
+          <p class="text-[11px] text-pine-200 flex items-center gap-1.5 whitespace-nowrap">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> 完全預約制 · 鳥松區
+          </p>
+        </div>
+      </div>
+
+      <!-- Desktop Navigation Tabs (Visible on screens >= 768px) -->
+      <nav class="hidden lg:flex items-center space-x-1 bg-black/25 p-1 rounded-xl border border-white/10 text-xs">
+        <button onclick="switchTab('booking')" id="dnav-booking" class="px-3 py-1.5 rounded-lg font-bold bg-white text-pine-900 shadow-sm transition whitespace-nowrap">
+          預約掛號
+        </button>
+        <button onclick="switchTab('intro')" id="dnav-intro" class="px-3 py-1.5 rounded-lg text-pine-100 hover:text-white hover:bg-white/10 transition whitespace-nowrap">
+          關於青松
+        </button>
+        <button onclick="switchTab('team')" id="dnav-team" class="px-3 py-1.5 rounded-lg text-pine-100 hover:text-white hover:bg-white/10 transition whitespace-nowrap">
+          治療師專長
+        </button>
+        <button onclick="switchTab('pricing')" id="dnav-pricing" class="px-3 py-1.5 rounded-lg text-pine-100 hover:text-white hover:bg-white/10 transition whitespace-nowrap">
+          服務收費
+        </button>
+        <button onclick="switchTab('about')" id="dnav-about" class="px-3 py-1.5 rounded-lg text-pine-100 hover:text-white hover:bg-white/10 transition whitespace-nowrap">
+          門診須知
+        </button>
+        <button onclick="switchTab('mybookings')" id="dnav-mybookings" class="px-3 py-1.5 rounded-lg text-pine-100 hover:text-white hover:bg-white/10 transition flex items-center gap-1.5 whitespace-nowrap">
+          <span>我的預約</span>
+          <span id="dnavBookingBadge" class="hidden w-2 h-2 rounded-full bg-emerald-400"></span>
+        </button>
+      </nav>
+
+      <!-- User Profile (For Patient LIFF) - NO Admin link visible here -->
+      <div class="flex items-center space-x-2 flex-shrink-0">
+        <div class="flex items-center space-x-1.5 bg-black/20 border border-white/15 rounded-full px-2.5 py-1 text-xs">
+          <img id="userAvatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=qingsong" class="w-5 h-5 rounded-full bg-white shadow-xs" alt="Avatar">
+          <span id="userName" class="text-xs font-medium max-w-[90px] truncate text-white">LINE 用戶</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Simulator Modal -->
+    <div id="simModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center backdrop-blur-sm p-4">
+      <div class="bg-white rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl animate-in fade-in">
+        <div class="flex items-center justify-between border-b pb-3">
+          <div class="flex items-center space-x-2">
+            <i data-lucide="smartphone" class="w-5 h-5 text-pine-700"></i>
+            <h3 class="font-bold text-slate-800 text-sm">LINE 身份模擬與測試</h3>
+          </div>
+          <button onclick="toggleUserSimulator()" class="p-1 hover:bg-slate-100 rounded-full">
+            <i data-lucide="x" class="w-5 h-5 text-slate-500"></i>
+          </button>
+        </div>
+        <p class="text-xs text-slate-500 leading-relaxed">
+          電腦瀏覽器測試時可切換不同 LINE 用戶，檢驗病患記憶與預約記錄：
+        </p>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="switchTestUser('U_DEMO_001', '陳雅婷', '0912-345-678', '1992-05-18')" class="p-2.5 border rounded-xl text-left hover:border-pine-600 hover:bg-pine-50 transition">
+            <div class="font-bold text-xs text-slate-800">陳雅婷 (初診)</div>
+            <div class="text-[11px] text-slate-500">0912-345-678</div>
+          </button>
+          <button onclick="switchTestUser('U_DEMO_002', '林建宏', '0928-112-233', '1985-11-04')" class="p-2.5 border rounded-xl text-left hover:border-pine-600 hover:bg-pine-50 transition">
+            <div class="font-bold text-xs text-slate-800">林建宏 (複診)</div>
+            <div class="text-[11px] text-slate-500">0928-112-233</div>
+          </button>
+        </div>
+        <div class="pt-2 border-t flex justify-between items-center text-xs text-slate-500">
+          <span>LINE UID: <code id="currentUidDisplay" class="text-pine-700 font-mono">U_DEMO_001</code></span>
+          <button onclick="switchTestUser('U_NEW_' + Math.floor(Math.random()*9000+1000), '新病患', '', '')" class="text-pine-700 font-bold underline">隨機新用戶</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 p-4 md:p-8 overflow-y-auto">
+
+      <!-- ================= TAB 1: 預約掛號 ================= -->
+      <section id="tab-booking" class="tab-pane space-y-5">
+        
+        <!-- Step Progress Indicator -->
+        <div class="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-xs">
+          <div class="flex items-center justify-between text-xs font-medium text-slate-500 px-2 max-w-xl mx-auto">
+            <div id="stepDot1" class="flex items-center space-x-1.5 text-pine-700 font-bold">
+              <span class="w-6 h-6 rounded-full bg-pine-700 text-white flex items-center justify-center text-xs">1</span>
+              <span>就診類別</span>
+            </div>
+            <div class="h-[1px] flex-1 mx-2 bg-slate-200"></div>
+            <div id="stepDot2" class="flex items-center space-x-1.5 text-slate-400">
+              <span class="w-6 h-6 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs">2</span>
+              <span>預約時段</span>
+            </div>
+            <div class="h-[1px] flex-1 mx-2 bg-slate-200"></div>
+            <div id="stepDot3" class="flex items-center space-x-1.5 text-slate-400">
+              <span class="w-6 h-6 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs">3</span>
+              <span>基本資料</span>
+            </div>
+            <div class="h-[1px] flex-1 mx-2 bg-slate-200"></div>
+            <div id="stepDot4" class="flex items-center space-x-1.5 text-slate-400">
+              <span class="w-6 h-6 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs">4</span>
+              <span>核對送出</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 1: 就診類別與照會單檢查 (完全去除治療師選項) -->
+        <div id="bookingStep1" class="space-y-4 max-w-2xl mx-auto">
+          
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <div class="flex items-center justify-between border-b pb-3">
+              <label class="block text-base font-bold text-slate-900 flex items-center gap-2">
+                <i data-lucide="clipboard-check" class="w-5 h-5 text-pine-700"></i> 請選擇就診類別
+              </label>
+              <span class="text-xs text-slate-400">青松物理治療所門診</span>
+            </div>
+
+            <div class="grid grid-cols-1 gap-3">
+              <!-- 初診 -->
+              <label class="relative flex items-start p-4 border border-slate-200 rounded-2xl cursor-pointer transition hover:border-pine-400" id="cardVisitFirst">
+                <input type="radio" name="visitType" value="FIRST_VISIT" class="mt-1 text-pine-700 focus:ring-pine-500" onchange="onVisitTypeChange()">
+                <div class="ml-3 flex-1">
+                  <div class="flex items-center justify-between">
+                    <span class="font-bold text-slate-900 text-sm md:text-base">初診（第一次前來）</span>
+                    <span class="text-xs bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-bold">需醫師照會單</span>
+                  </div>
+                  <p class="text-xs text-slate-500 mt-1">首次前往青松，將進行動作力學檢查與完整骨骼肌肉疼痛評估。</p>
+                  
+                  <!-- 照會單勾選區 (id="referralSection" 供 JS 顯示/隱藏) -->
+                  <div id="referralSection" class="mt-3 pt-3 border-t border-pine-200/60 hidden">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                      <span class="text-xs font-bold text-slate-800 flex items-center gap-1">
+                        <i data-lucide="file-text" class="w-4 h-4 text-pine-700"></i> 是否持有醫師照會單／轉診單？
+                      </span>
+                      <div class="flex items-center space-x-4 bg-white px-3 py-1.5 rounded-xl border border-slate-200">
+                        <label class="inline-flex items-center text-xs font-bold text-slate-700 cursor-pointer">
+                          <input type="radio" name="hasReferral" value="yes" class="text-pine-700 focus:ring-pine-500" onchange="onReferralChange()">
+                          <span class="ml-1.5 text-pine-800 font-bold">有照會單</span>
+                        </label>
+                        <label class="inline-flex items-center text-xs font-bold text-slate-700 cursor-pointer">
+                          <input type="radio" name="hasReferral" value="no" class="text-rose-600 focus:ring-rose-500" onchange="onReferralChange()">
+                          <span class="ml-1.5 text-rose-600 font-bold">無照會單</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <!-- 當勾選【有】時的提示 -->
+                    <div id="referralYesTip" class="hidden mt-2.5 text-xs text-pine-800 bg-pine-100/70 p-2.5 rounded-xl flex items-center gap-2">
+                      <i data-lucide="check-circle" class="w-4 h-4 text-pine-700 flex-shrink-0"></i>
+                      <span>線上預約免上傳照片，<strong>就診當日請務必攜帶轉診單／照會單正本</strong>前來。</span>
+                    </div>
+
+                    <!-- 當勾選【無】時的強烈法規阻擋提示 -->
+                    <div id="referralNoAlert" class="hidden mt-2.5 text-xs text-rose-900 bg-rose-50 border-2 border-rose-300 p-3.5 rounded-xl space-y-1.5">
+                      <div class="font-bold flex items-center gap-1.5 text-rose-700 text-sm">
+                        <i data-lucide="alert-octagon" class="w-4 h-4 flex-shrink-0"></i>
+                        依物理治療法規規定：無照會單恕無法進行看診
+                      </div>
+                      <p class="text-slate-600 leading-relaxed">
+                        物理治療屬醫療業務，依《物理治療師法》規範，物理治療門診初診<strong>必須持有醫院或診所開立之醫師照會單／轉診單</strong>方可進行看診處置。
+                      </p>
+                      <p class="text-rose-700 font-medium">
+                        👉 建議您先至醫療院所取得醫師照會單後再預約，或可改選下方免照會單之「肌力訓練與健康促進」服務。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </label>
+
+              <!-- 不是初診 (複診) -->
+              <label class="relative flex items-start p-4 border border-slate-200 rounded-2xl cursor-pointer hover:border-pine-600 transition" id="cardVisitFollow">
+                <input type="radio" name="visitType" value="FOLLOW_UP" class="mt-1 text-pine-700 focus:ring-pine-500" onchange="onVisitTypeChange()">
+                <div class="ml-3 flex-1">
+                  <div class="flex items-center justify-between">
+                    <span class="font-bold text-slate-800 text-sm md:text-base">不是初診（複診追蹤）</span>
+                    <span class="text-xs bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full font-bold">接續療程</span>
+                  </div>
+                  <p class="text-xs text-slate-500 mt-1">曾在青松物理治療所接受過評估或治療，接續進行療程進度。</p>
+                </div>
+              </label>
+
+              <!-- 肌力訓練與健康促進 -->
+              <label class="relative flex items-start p-4 border border-slate-200 rounded-2xl cursor-pointer hover:border-pine-600 transition" id="cardVisitFitness">
+                <input type="radio" name="visitType" value="FITNESS" class="mt-1 text-pine-700 focus:ring-pine-500" onchange="onVisitTypeChange()">
+                <div class="ml-3 flex-1">
+                  <div class="flex items-center justify-between">
+                    <span class="font-bold text-slate-800 text-sm md:text-base">肌力訓練與健康促進</span>
+                    <span class="text-xs bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full font-bold">依法規免照會單</span>
+                  </div>
+                  <p class="text-xs text-slate-500 mt-1">核心肌群強化、動作控制訓練、銀髮族平衡防跌、姿勢體態維持（依法規免醫師照會單）。</p>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- 預約物理治療師選擇 -->
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+            <div class="flex items-center justify-between border-b pb-3">
+              <label class="block text-base font-bold text-slate-900 flex items-center gap-2">
+                <i data-lucide="user-check" class="w-5 h-5 text-pine-700"></i> 想預約的物理治療師
+              </label>
+              <span class="text-xs text-slate-400">可指定專屬治療師</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="therapistSelectionList">
+              <!-- 劉韋綸 院長 -->
+              <label class="flex items-center sm:flex-col sm:items-center justify-between sm:justify-center p-4 border-2 border-pine-700 bg-pine-50/40 rounded-2xl cursor-pointer transition text-center hover:border-pine-600 shadow-xs" id="cardTherapistLiu">
+                <div class="flex items-center sm:flex-col gap-2.5">
+                  <input type="radio" name="therapistOption" value="th_liu" checked class="text-pine-700 focus:ring-pine-500" onchange="onTherapistChange('th_liu', '劉韋綸 院長')">
+                  <div class="text-left sm:text-center">
+                    <span class="font-bold text-slate-900 text-sm md:text-base block">劉韋綸</span>
+                    <span class="text-xs text-slate-500 block">院長／所長</span>
+                  </div>
+                </div>
+                <span class="text-[11px] bg-pine-100 text-pine-800 font-bold px-2.5 py-0.5 rounded-full mt-1.5">徒手／動作控制</span>
+              </label>
+
+              <!-- 洪嘉良 物理治療師 -->
+              <label class="flex items-center sm:flex-col sm:items-center justify-between sm:justify-center p-4 border border-slate-200 rounded-2xl cursor-pointer transition text-center hover:border-pine-600" id="cardTherapistHong">
+                <div class="flex items-center sm:flex-col gap-2.5">
+                  <input type="radio" name="therapistOption" value="th_hong" class="text-pine-700 focus:ring-pine-500" onchange="onTherapistChange('th_hong', '洪嘉良 物理治療師')">
+                  <div class="text-left sm:text-center">
+                    <span class="font-bold text-slate-900 text-sm md:text-base block">洪嘉良</span>
+                    <span class="text-xs text-slate-500 block">物理治療師</span>
+                  </div>
+                </div>
+                <span class="text-[11px] bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-full mt-1.5">術後／肌力防跌</span>
+              </label>
+            </div>
+          </div>
+
+          <button id="btnStep1Next" onclick="goToStep(2)" class="w-full py-4 bg-pine-700 hover:bg-pine-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold rounded-2xl shadow-md transition flex items-center justify-center gap-2 text-sm md:text-base">
+            <span id="btnStep1NextText">下一步：選擇預約時段</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- STEP 2: 選擇預約時段 (週一至週五固定 8 個時段，週六日休息) -->
+        <div id="bookingStep2" class="hidden space-y-4 max-w-2xl mx-auto">
+          
+          <!-- 日期選取 -->
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+            <div class="flex items-center justify-between">
+              <label class="block text-sm md:text-base font-bold text-slate-900 flex items-center gap-2">
+                <i data-lucide="calendar" class="w-5 h-5 text-pine-700"></i> 選擇看診日期
+              </label>
+              <span class="text-xs text-slate-500 font-medium bg-slate-100 px-2 py-0.5 rounded-lg">開放未來 30 天</span>
+            </div>
+
+            <!-- Date Scroll List -->
+            <div class="flex space-x-2.5 overflow-x-auto pb-2 pt-1 hide-scrollbar" id="datePickerList">
+              <!-- Dynamically rendered -->
+            </div>
+
+            <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+              <span id="selectedDateText" class="font-extrabold text-pine-800 text-sm md:text-base">請選取日期</span>
+              <span id="closedBadge" class="hidden bg-rose-100 text-rose-700 px-2.5 py-0.5 rounded-full font-bold">週六日休診</span>
+            </div>
+          </div>
+
+          <!-- Scroll anchor for auto-jump after date selection -->
+          <div id="slotSectionAnchor" class="scroll-mt-4"></div>
+
+          <!-- 時段選取 (嚴格依照使用者提供之 8 個時段排版) -->
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <div class="flex items-center justify-between border-b pb-3">
+              <div>
+                <label class="block text-sm md:text-base font-bold text-slate-900 flex items-center gap-2">
+                  <i data-lucide="clock" class="w-5 h-5 text-pine-700"></i> 選擇預約時間
+                </label>
+                <p class="text-xs text-slate-400 mt-0.5">每時段專屬物理治療師施作，額滿自動鎖定</p>
+              </div>
+              <span class="text-xs text-pine-700 font-bold bg-pine-50 border border-pine-200 px-2 py-1 rounded-lg">週一至週五看診</span>
+            </div>
+
+            <!-- Loading State -->
+            <div id="slotsLoading" class="py-12 text-center text-slate-400 text-xs flex flex-col items-center gap-2">
+              <i data-lucide="loader-2" class="w-6 h-6 animate-spin text-pine-600"></i>
+              <span>正在載入時段空檔...</span>
+            </div>
+
+            <!-- Closed Notice when Saturday or Sunday selected -->
+            <div id="weekendClosedNotice" class="hidden py-8 px-4 text-center bg-rose-50 border border-rose-200 rounded-2xl space-y-2">
+              <div class="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+                <i data-lucide="calendar-x" class="w-5 h-5"></i>
+              </div>
+              <h4 class="font-bold text-sm text-rose-800">青松物理治療所 週六、週日固定休診</h4>
+              <p class="text-xs text-slate-500">門診時間為週一至週五，請點選上方其他工作日預約看診時段。</p>
+            </div>
+
+            <!-- Slots Grid (3 rows: 09:00-11:00 / 15:00-17:00 / 19:00-20:00) -->
+            <div id="slotsContainer" class="hidden space-y-4">
+              <!-- Row 1: 上午時段 -->
+              <div>
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <i data-lucide="sun" class="w-3.5 h-3.5 text-amber-500"></i> 上午時段
+                </div>
+                <div class="grid grid-cols-3 gap-2.5 sm:gap-3" id="morningSlots"></div>
+              </div>
+
+              <!-- Row 2: 下午時段 -->
+              <div>
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <i data-lucide="sun-medium" class="w-3.5 h-3.5 text-amber-600"></i> 下午時段
+                </div>
+                <div class="grid grid-cols-3 gap-2.5 sm:gap-3" id="afternoonSlots"></div>
+              </div>
+
+              <!-- Row 3: 晚間時段 -->
+              <div>
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <i data-lucide="moon" class="w-3.5 h-3.5 text-indigo-500"></i> 晚間時段
+                </div>
+                <div class="grid grid-cols-3 gap-2.5 sm:gap-3" id="eveningSlots"></div>
+              </div>
+
+              <!-- Selected Slot Confirmation Banner -->
+              <div id="slotSelectedAlert" class="hidden p-3.5 bg-pine-50 border-2 border-pine-500 rounded-2xl text-xs text-pine-900 flex items-center justify-between">
+                <span class="flex items-center gap-2 font-bold text-sm">
+                  <i data-lucide="check-circle" class="w-5 h-5 text-pine-700"></i>
+                  已選定：<span id="chosenSlotText" class="text-pine-800 font-extrabold text-base"></span>
+                </span>
+                <span class="text-xs bg-pine-700 text-white px-2 py-0.5 rounded-full font-bold">時段已保留</span>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="flex space-x-3">
+            <button onclick="goToStep(1)" class="w-1/3 py-3.5 border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-2xl transition text-sm">
+              上一步
+            </button>
+            <button id="btnToStep3" onclick="goToStep(3)" disabled class="w-2/3 py-3.5 bg-pine-700 hover:bg-pine-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold rounded-2xl shadow-md transition text-sm flex items-center justify-center gap-1.5">
+              <span>下一步：填寫病患資料</span>
+              <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- STEP 3: 病患基本資料 -->
+        <div id="bookingStep3" class="hidden space-y-4 max-w-2xl mx-auto">
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <div class="flex items-center justify-between border-b pb-3">
+              <label class="block text-sm md:text-base font-bold text-slate-900 flex items-center gap-2">
+                <i data-lucide="user" class="w-5 h-5 text-pine-700"></i> 病患聯絡資料
+              </label>
+              <button id="btnAutofill" onclick="autoFillPatientData()" class="hidden text-xs text-pine-700 font-bold bg-pine-50 hover:bg-pine-100 border border-pine-200 px-2.5 py-1 rounded-xl transition flex items-center gap-1">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-pine-700"></i> 帶入上次資料
+              </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <!-- 姓名 -->
+              <div>
+                <label class="block font-bold text-slate-700 mb-1.5">病患姓名 <span class="text-rose-500">*</span></label>
+                <input type="text" id="inputName" placeholder="請填寫真實姓名" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pine-600">
+              </div>
+
+              <!-- 手機號碼 -->
+              <div>
+                <label class="block font-bold text-slate-700 mb-1.5">手機號碼 <span class="text-rose-500">*</span> (接收LINE/簡訊提醒)</label>
+                <input type="tel" id="inputPhone" placeholder="0912-345-678" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pine-600">
+              </div>
+
+              <!-- 出生年月日 -->
+              <div class="md:col-span-2">
+                <label class="block font-bold text-slate-700 mb-1.5">出生年月日 <span class="text-rose-500">*</span></label>
+                <input type="date" id="inputBirthday" value="1990-01-01" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pine-600">
+              </div>
+
+              <!-- 備註說明 -->
+              <div class="md:col-span-2">
+                <label class="block font-bold text-slate-700 mb-1.5">主要不適狀況／備註 (選填)</label>
+                <textarea id="inputNote" rows="2" placeholder="例如：右肩疼痛兩個月、打羽球拉傷腰部..." class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pine-600"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex space-x-3">
+            <button onclick="goToStep(2)" class="w-1/3 py-3.5 border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-2xl transition text-sm">
+              上一步
+            </button>
+            <button onclick="goToStep(4)" class="w-2/3 py-3.5 bg-pine-700 hover:bg-pine-800 text-white font-bold rounded-2xl shadow-md transition text-sm flex items-center justify-center gap-1.5">
+              <span>下一步：核對預約明細</span>
+              <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- STEP 4: 核對送出 -->
+        <div id="bookingStep4" class="hidden space-y-4 max-w-2xl mx-auto">
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <h3 class="text-sm md:text-base font-bold text-slate-900 flex items-center gap-2 border-b pb-3">
+              <i data-lucide="file-check" class="w-5 h-5 text-pine-700"></i> 請確認您的掛號預約資料
+            </h3>
+
+            <div class="bg-slate-50 p-4 rounded-2xl space-y-2.5 text-xs md:text-sm">
+              <div class="flex justify-between"><span class="text-slate-500">預約看診日期：</span><span id="confirmDate" class="font-bold text-slate-800"></span></div>
+              <div class="flex justify-between"><span class="text-slate-500">預約時段：</span><span id="confirmTime" class="font-bold text-pine-700 text-base"></span></div>
+              <div class="flex justify-between"><span class="text-slate-500">就診醫療院所：</span><span class="font-bold text-slate-800">青松物理治療所</span></div>
+              <div class="flex justify-between"><span class="text-slate-500">預約物理治療師：</span><span id="confirmTherapist" class="font-bold text-pine-800"></span></div>
+              <div class="flex justify-between"><span class="text-slate-500">就診類別：</span><span id="confirmVisitType" class="font-bold text-slate-800"></span></div>
+              <div class="flex justify-between"><span class="text-slate-500">照會轉診單狀態：</span><span id="confirmReferral" class="font-bold text-slate-800"></span></div>
+              <div class="border-t border-slate-200 my-2 pt-2 flex justify-between"><span class="text-slate-500">病患姓名：</span><span id="confirmName" class="font-bold text-slate-800"></span></div>
+              <div class="flex justify-between"><span class="text-slate-500">聯絡電話：</span><span id="confirmPhone" class="font-bold text-slate-800"></span></div>
+            </div>
+
+            <!-- 看診提醒 -->
+            <div class="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl space-y-1.5 text-xs text-amber-900 leading-relaxed">
+              <div class="font-bold flex items-center gap-1.5 text-amber-800">
+                <i data-lucide="alert-circle" class="w-4 h-4"></i> 就診叮嚀
+              </div>
+              <p>1. 採完全預約制，請提早 5-10 分鐘抵達報到。</p>
+              <p>2. 請穿著方便活動伸展之寬鬆運動衣褲。</p>
+              <p>3. <strong>看診前 24 小時系統將自動發送 LINE 確認卡片</strong>，屆時請留意點擊「確認前往」保留時段。</p>
+            </div>
+
+            <label class="flex items-center text-xs text-slate-700 cursor-pointer pt-1">
+              <input type="checkbox" id="checkAgree" checked class="rounded text-pine-700 focus:ring-pine-500 mr-2.5">
+              <span>我已確認上述資料無誤，並同意青松物理治療所看診預約規範</span>
+            </label>
+          </div>
+
+          <div class="flex space-x-3">
+            <button onclick="goToStep(3)" class="w-1/3 py-3.5 border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-2xl transition text-sm">
+              修改
+            </button>
+            <button id="btnSubmitBooking" onclick="submitBooking()" class="w-2/3 py-4 bg-pine-700 hover:bg-pine-800 text-white font-bold rounded-2xl shadow-lg transition text-sm md:text-base flex items-center justify-center gap-2">
+              <i data-lucide="check" class="w-4 h-4"></i>
+              <span>確認送出預約</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Booking Success View -->
+        <div id="bookingSuccessView" class="hidden bg-white p-6 md:p-8 rounded-3xl border border-emerald-200 shadow-lg text-center space-y-5 max-w-xl mx-auto">
+          <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+            <i data-lucide="check-circle" class="w-9 h-9"></i>
+          </div>
+          <div>
+            <h3 class="text-xl font-bold text-slate-900">預約掛號成功！</h3>
+            <p class="text-xs md:text-sm text-slate-500 mt-1">青松物理治療所已為您保留專屬看診時段</p>
+          </div>
+
+          <div class="p-4 bg-emerald-50/60 rounded-2xl text-left text-xs md:text-sm space-y-2.5 border border-emerald-100">
+            <div class="flex justify-between"><span class="text-slate-500">預約編號：</span><code id="successAptId" class="font-mono font-bold text-emerald-800"></code></div>
+            <div class="flex justify-between"><span class="text-slate-500">看診日期：</span><span id="successDate" class="font-bold text-slate-800"></span></div>
+            <div class="flex justify-between"><span class="text-slate-500">預約時段：</span><span id="successTime" class="font-bold text-emerald-700"></span></div>
+            <div class="flex justify-between"><span class="text-slate-500">安排治療師：</span><span id="successTherapist" class="font-bold text-pine-800"></span></div>
+            <div class="flex justify-between"><span class="text-slate-500">看診機構：</span><span class="font-bold text-slate-800">青松物理治療所</span></div>
+          </div>
+
+          <!-- LINE Flex Card Preview -->
+          <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-left">
+            <div class="text-xs font-bold text-slate-500 mb-1.5 flex items-center gap-1.5">
+              <i data-lucide="bell" class="w-4 h-4 text-pine-600"></i> LINE 24H 動態出席確認推播：
+            </div>
+            <div class="text-xs text-slate-600 leading-relaxed">
+              系統將於<strong>就診前 24 小時</strong>在 LINE 發送出席確認卡片，屆時請點選確認；若臨時不克前來點擊取消，時段將立即自動釋出給其他病友。
+            </div>
+          </div>
+
+          <div class="flex space-x-3 pt-2">
+            <button onclick="switchTab('mybookings')" class="flex-1 py-3.5 bg-pine-700 hover:bg-pine-800 text-white font-bold rounded-xl text-xs md:text-sm transition">
+              前往「我的預約」查看
+            </button>
+            <button onclick="resetBookingForm()" class="px-5 py-3.5 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs md:text-sm font-bold transition">
+              再次預約
+            </button>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ================= TAB: 關於青松 (依官網核心理念與環境介紹) ================= -->
+      <section id="tab-intro" class="tab-pane hidden space-y-4 max-w-3xl mx-auto">
+        <!-- 核心理念橫幅 -->
+        <div class="relative overflow-hidden bg-gradient-to-br from-pine-900 via-pine-800 to-pine-700 text-white p-6 md:p-8 rounded-3xl shadow-md space-y-3">
+          <div class="flex items-center space-x-2 text-pine-200 text-xs font-bold tracking-wider uppercase">
+            <i data-lucide="sparkles" class="w-4 h-4 text-emerald-400"></i>
+            <span>青松核心理念 · 家庭式物理治療環境</span>
+          </div>
+          <h2 class="text-xl md:text-2xl font-black tracking-tight leading-snug">
+            「給需要治療的人一個像家庭式的輕鬆治療所」
+          </h2>
+          <p class="text-xs md:text-sm text-pine-100/90 leading-relaxed max-w-2xl">
+            青松物理治療所座落於高雄鳥松區，由劉韋綸所長與洪嘉良治療師共同守護您的動作與骨骼健康。我們希望打破傳統醫療院所冰冷與匆促的距離感，在溫馨、安心且專業的環境中，不只陪您擺脫疼痛，更讓您在治療結束後，學會平常能自我保養與鍛鍊的核心方式。
+          </p>
+        </div>
+
+        <!-- 四大治療核心項目 (依官網介紹) -->
+        <div class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div class="flex items-center space-x-2 border-b pb-3">
+            <i data-lucide="layers" class="w-5 h-5 text-pine-700"></i>
+            <div>
+              <h3 class="text-base font-bold text-slate-900">四大核心物理治療特色</h3>
+              <p class="text-xs text-slate-500">深入病灶根源，結合徒手、運動與高端科學儀器</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- 1. 骨骼肌肉徒手治療 -->
+            <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/60 space-y-2 hover:border-pine-400 transition">
+              <div class="flex items-center gap-2">
+                <span class="w-7 h-7 rounded-xl bg-pine-100 text-pine-800 font-bold flex items-center justify-center text-xs">01</span>
+                <h4 class="font-bold text-slate-900 text-sm">骨骼肌肉徒手物理治療</h4>
+              </div>
+              <p class="text-xs text-slate-600 leading-relaxed">
+                由物理治療師親自以雙手進行精準關節鬆動、肌筋膜深層放鬆、深層組織按摩與神經鬆動技術，快速緩解急性扭拉傷、關節卡頓與長期慢性頑固疼痛。
+              </p>
+            </div>
+
+            <!-- 2. 動作控制與運動治療 -->
+            <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/60 space-y-2 hover:border-pine-400 transition">
+              <div class="flex items-center gap-2">
+                <span class="w-7 h-7 rounded-xl bg-pine-100 text-pine-800 font-bold flex items-center justify-center text-xs">02</span>
+                <h4 class="font-bold text-slate-900 text-sm">運動治療與動作控制訓練</h4>
+              </div>
+              <p class="text-xs text-slate-600 leading-relaxed">
+                找出造成反覆疼痛的錯誤發力模式，結合核心肌群強化、呼吸動作整合、本體感覺神經肌肉促進（PNF），重建正確姿勢力學，避免運動傷害再度復發。
+              </p>
+            </div>
+
+            <!-- 3. 高端儀器輔助 (震波) -->
+            <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/60 space-y-2 hover:border-pine-400 transition">
+              <div class="flex items-center gap-2">
+                <span class="w-7 h-7 rounded-xl bg-pine-100 text-pine-800 font-bold flex items-center justify-center text-xs">03</span>
+                <h4 class="font-bold text-slate-900 text-sm">高端儀器與體外震波治療</h4>
+              </div>
+              <p class="text-xs text-slate-600 leading-relaxed">
+                備有聚焦式及發散式體外震波治療儀，精準打入深層肌腱韌帶與鈣化點，對於足底筋膜炎、網球肘、旋轉肌袖肌腱炎具有優異的組織再生與血管新生效果。
+              </p>
+            </div>
+
+            <!-- 4. 術後復健與銀髮肌力防跌 -->
+            <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/60 space-y-2 hover:border-pine-400 transition">
+              <div class="flex items-center gap-2">
+                <span class="w-7 h-7 rounded-xl bg-pine-100 text-pine-800 font-bold flex items-center justify-center text-xs">04</span>
+                <h4 class="font-bold text-slate-900 text-sm">術後物理治療與健康促進</h4>
+              </div>
+              <p class="text-xs text-slate-600 leading-relaxed">
+                骨科各類關節置換、十字韌帶重建、骨折內固定術後黃金復健；並為樂齡銀髮族規劃安全平衡步態訓練與防跌肌力課程，促進長輩健康獨立生活。
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 官網環境特色與精神 -->
+        <div class="bg-pine-50/60 p-5 md:p-6 rounded-2xl border border-pine-200 text-slate-800 space-y-3">
+          <h3 class="font-bold text-sm md:text-base text-pine-900 flex items-center gap-2">
+            <i data-lucide="heart-handshake" class="w-5 h-5 text-pine-700"></i>
+            為什麼選擇青松物理治療所？
+          </h3>
+          <ul class="text-xs md:text-sm text-slate-700 space-y-2 leading-relaxed">
+            <li class="flex items-start gap-2">
+              <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0"></i>
+              <span><strong>1對1專屬全程評估施作</strong>：非流水線式電療熱敷，每位病患皆享有專屬治療師完整評估與動態徒手調整。</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0"></i>
+              <span><strong>治療不只是暫時止痛，更學會自我保養</strong>：每一次看診結束後，治療師皆會親自傳授病患日常居家的自主運動處方。</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0"></i>
+              <span><strong>合法立案、安全把關</strong>：院長與治療師皆具備國家物理治療師高考合格執照，醫療處置安全有保障。</span>
+            </li>
+          </ul>
+          <div class="pt-2 text-right">
+            <a href="https://www.qingsong-pt.com/paper/other_page.php?id=17683" target="_blank" class="inline-flex items-center gap-1 text-xs text-pine-700 font-bold hover:underline">
+              <span>前往青松物理治療所官方網站深入了解</span>
+              <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 2: 治療師專長 (去除學經歷，只留專長) ================= -->
+      <section id="tab-team" class="tab-pane hidden space-y-4 max-w-3xl mx-auto">
+        <div class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div class="flex items-center space-x-2.5 border-b pb-3">
+            <i data-lucide="award" class="w-5 h-5 text-pine-700"></i>
+            <div>
+              <h2 class="text-base font-bold text-slate-900">物理治療師專長介紹</h2>
+              <p class="text-xs text-slate-500">青松物理治療所兩位專業治療師之核心專長項目</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+            
+            <!-- Therapist 1: 劉韋綸 院長 (只留專長) -->
+            <div class="p-5 rounded-2xl bg-gradient-to-br from-pine-50/70 to-white border border-pine-200 space-y-3.5 shadow-xs">
+              <div class="flex items-center space-x-3.5">
+                <div class="w-14 h-14 rounded-2xl overflow-hidden bg-pine-100 flex-shrink-0 border-2 border-pine-600 shadow-sm">
+                  <img src="/images/therapist_liu.svg" class="w-full h-full object-cover" alt="劉韋綸">
+                </div>
+                <div>
+                  <div class="flex items-center space-x-2">
+                    <h3 class="text-base font-bold text-slate-900">劉韋綸</h3>
+                    <span class="text-xs bg-pine-700 text-white px-2 py-0.5 rounded-full font-bold">院長／所長</span>
+                  </div>
+                  <p class="text-xs text-pine-800 font-medium mt-0.5">Physical Therapist</p>
+                </div>
+              </div>
+
+              <!-- 專長領域 (完整保留) -->
+              <div>
+                <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-2">
+                  <i data-lucide="check-circle-2" class="w-4 h-4 text-pine-700"></i> 專業專長
+                </span>
+                <div class="flex flex-wrap gap-1.5">
+                  <span class="text-xs bg-white border border-pine-300 text-pine-900 px-2.5 py-1 rounded-lg font-medium shadow-2xs">骨骼肌肉徒手物理治療</span>
+                  <span class="text-xs bg-white border border-pine-300 text-pine-900 px-2.5 py-1 rounded-lg font-medium shadow-2xs">肌肉動作控制訓練</span>
+                  <span class="text-xs bg-white border border-pine-300 text-pine-900 px-2.5 py-1 rounded-lg font-medium shadow-2xs">銀髮族運動訓練</span>
+                  <span class="text-xs bg-white border border-pine-300 text-pine-900 px-2.5 py-1 rounded-lg font-medium shadow-2xs">肌筋膜疼痛問題處理</span>
+                  <span class="text-xs bg-white border border-pine-300 text-pine-900 px-2.5 py-1 rounded-lg font-medium shadow-2xs">運動傷害防護與修復</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Therapist 2: 洪嘉良 物理治療師 (只留專長) -->
+            <div class="p-5 rounded-2xl bg-white border border-slate-200 space-y-3.5 shadow-xs">
+              <div class="flex items-center space-x-3.5">
+                <div class="w-14 h-14 rounded-2xl overflow-hidden bg-slate-100 flex-shrink-0 border-2 border-slate-300 shadow-sm">
+                  <img src="/images/therapist_hong.png" class="w-full h-full object-cover object-top" alt="洪嘉良">
+                </div>
+                <div>
+                  <div class="flex items-center space-x-2">
+                    <h3 class="text-base font-bold text-slate-900">洪嘉良</h3>
+                    <span class="text-xs bg-slate-700 text-white px-2 py-0.5 rounded-full font-bold">物理治療師</span>
+                  </div>
+                  <p class="text-xs text-slate-600 font-medium mt-0.5">Physical Therapist</p>
+                </div>
+              </div>
+
+              <!-- 專長領域 (完整保留) -->
+              <div>
+                <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-2">
+                  <i data-lucide="check-circle-2" class="w-4 h-4 text-pine-700"></i> 專業專長
+                </span>
+                <div class="flex flex-wrap gap-1.5">
+                  <span class="text-xs bg-slate-50 border border-slate-300 text-slate-800 px-2.5 py-1 rounded-lg font-medium shadow-2xs">肌肉骨骼物理治療</span>
+                  <span class="text-xs bg-slate-50 border border-slate-300 text-slate-800 px-2.5 py-1 rounded-lg font-medium shadow-2xs">術後物理治療</span>
+                  <span class="text-xs bg-slate-50 border border-slate-300 text-slate-800 px-2.5 py-1 rounded-lg font-medium shadow-2xs">肌筋膜沾黏處理</span>
+                  <span class="text-xs bg-slate-50 border border-slate-300 text-slate-800 px-2.5 py-1 rounded-lg font-medium shadow-2xs">動作控制訓練</span>
+                  <span class="text-xs bg-slate-50 border border-slate-300 text-slate-800 px-2.5 py-1 rounded-lg font-medium shadow-2xs">姿勢矯正與維持</span>
+                  <span class="text-xs bg-slate-50 border border-slate-300 text-slate-800 px-2.5 py-1 rounded-lg font-medium shadow-2xs">銀髮族肌力與平衡訓練</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="pt-3">
+            <button onclick="switchTab('booking')" class="w-full py-3.5 bg-pine-700 hover:bg-pine-800 text-white font-bold rounded-xl text-xs md:text-sm transition flex items-center justify-center gap-2 shadow-sm">
+              <i data-lucide="calendar" class="w-4 h-4"></i>
+              <span>前往線上預約掛號</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 3: 服務收費 ================= -->
+      <section id="tab-pricing" class="tab-pane hidden space-y-4 max-w-3xl mx-auto">
+        <div class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div class="flex items-center space-x-2.5 border-b pb-3">
+            <i data-lucide="receipt" class="w-5 h-5 text-pine-700"></i>
+            <div>
+              <h2 class="text-base font-bold text-slate-900">服務收費項目一覽</h2>
+              <p class="text-xs text-slate-500">青松物理治療所各項自費項目費率參考</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            <!-- Overall -->
+            <div class="p-4 border-2 border-pine-200 bg-pine-50/40 rounded-2xl md:col-span-2">
+              <div class="flex justify-between items-start">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-slate-900 text-base">整體評估治療</span>
+                    <span class="text-[10px] bg-pine-700 text-white px-2 py-0.5 rounded-full font-bold">熱門首選</span>
+                  </div>
+                  <span class="text-xs text-slate-500 mt-0.5 block">時間：約 40 - 60 分鐘 / 次</span>
+                </div>
+                <div class="text-right">
+                  <span class="text-xl font-extrabold text-pine-800">NT$ 1,500</span>
+                  <div class="text-[10px] text-slate-400">/ 次</div>
+                </div>
+              </div>
+              <p class="text-xs text-slate-600 mt-2 leading-relaxed">全身骨骼肌肉與關節功能全面檢查，結合徒手治療與客製運動指引。</p>
+            </div>
+
+            <!-- Local -->
+            <div class="p-4 border border-slate-200 rounded-2xl">
+              <div class="flex justify-between items-start">
+                <div>
+                  <span class="font-bold text-slate-900 text-sm md:text-base">局部評估治療</span>
+                  <div class="text-xs text-slate-500 mt-0.5">時間：約 20 - 30 分鐘</div>
+                </div>
+                <div class="text-right">
+                  <span class="text-base md:text-lg font-bold text-slate-800">NT$ 600 - 800</span>
+                  <div class="text-[10px] text-slate-400">/ 次</div>
+                </div>
+              </div>
+              <p class="text-xs text-slate-600 mt-2">針對單一關節或局部急性疼痛（如落枕、足踝扭傷、媽媽手）處置。</p>
+            </div>
+
+            <!-- Shockwave -->
+            <div class="p-4 border border-slate-200 rounded-2xl">
+              <div class="flex justify-between items-start">
+                <div>
+                  <span class="font-bold text-slate-900 text-sm md:text-base">高端體外震波治療</span>
+                  <div class="text-xs text-slate-500 mt-0.5">高端儀器深層組織修復</div>
+                </div>
+                <div class="text-right">
+                  <span class="text-base md:text-lg font-bold text-slate-800">NT$ 1,000</span>
+                  <div class="text-[10px] text-slate-400">/ 1500 發</div>
+                </div>
+              </div>
+              <p class="text-xs text-slate-600 mt-2">適用足底筋膜炎、五十肩、網球肘、鈣化性肌腱炎等慢性肌腱沾黏。</p>
+            </div>
+
+            <!-- Fitness -->
+            <div class="p-4 border border-slate-200 rounded-2xl md:col-span-2">
+              <div class="flex justify-between items-start">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-slate-900 text-sm md:text-base">高齡體適能與肌力訓練</span>
+                    <span class="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">免照會單</span>
+                  </div>
+                  <div class="text-xs text-slate-500 mt-0.5">時間：約 50 - 60 分鐘</div>
+                </div>
+                <div class="text-right">
+                  <span class="text-base md:text-lg font-bold text-slate-800">NT$ 3,000</span>
+                  <div class="text-[10px] text-slate-400">/ 次</div>
+                </div>
+              </div>
+              <p class="text-xs text-slate-600 mt-2">專門防跌倒平衡、長輩肌少症改善、核心穩定強化（依法規免照會單）。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 4: 門診須知 (週六日休診，無照會單不可看診) ================= -->
+      <section id="tab-about" class="tab-pane hidden space-y-4 max-w-3xl mx-auto">
+        <div class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div class="flex items-center space-x-2.5 border-b pb-3">
+            <i data-lucide="map-pin" class="w-5 h-5 text-pine-700"></i>
+            <div>
+              <h2 class="text-base font-bold text-slate-900">青松物理治療所門診資訊</h2>
+              <p class="text-xs text-slate-500">Ching-Song Physical Therapy Clinic</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs md:text-sm">
+            <div class="space-y-3">
+              <div class="flex items-start space-x-3">
+                <i data-lucide="map-pin" class="w-4 h-4 text-pine-700 mt-1 flex-shrink-0"></i>
+                <div>
+                  <span class="font-bold text-slate-800">院址：</span>
+                  <p class="text-slate-600 mt-0.5">高雄市鳥松區華美路69號</p>
+                  <a href="https://maps.google.com/?q=青松物理治療所" target="_blank" class="text-pine-700 font-bold hover:underline inline-flex items-center gap-1 mt-1 text-xs">
+                    Google 地圖導航 <i data-lucide="external-link" class="w-3 h-3"></i>
+                  </a>
+                </div>
+              </div>
+
+              <div class="flex items-start space-x-3">
+                <i data-lucide="phone" class="w-4 h-4 text-pine-700 mt-1 flex-shrink-0"></i>
+                <div>
+                  <span class="font-bold text-slate-800">聯絡電話：</span>
+                  <p class="text-slate-600 mt-0.5">07-7353353</p>
+                  <a href="tel:077353353" class="text-pine-700 font-bold hover:underline inline-flex items-center gap-1 mt-1 text-xs">
+                    一鍵撥號 <i data-lucide="phone-call" class="w-3 h-3"></i>
+                  </a>
+                </div>
+              </div>
+
+              <div class="flex items-start space-x-3">
+                <i data-lucide="message-circle" class="w-4 h-4 text-emerald-600 mt-1 flex-shrink-0"></i>
+                <div>
+                  <span class="font-bold text-slate-800">官方 LINE：</span>
+                  <p class="text-slate-600 mt-0.5">@126cxeyj</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- 門診時間 (週一至週五，週六日休診) -->
+            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+              <span class="font-bold text-slate-800 flex items-center gap-1.5 text-xs md:text-sm">
+                <i data-lucide="clock" class="w-4 h-4 text-pine-700"></i> 門診營業時間
+              </span>
+              <div class="text-xs text-slate-600 space-y-1 pl-1">
+                <p><strong>週一至週五看診時段：</strong></p>
+                <p>• 上午：09:00, 10:00, 11:00</p>
+                <p>• 下午：15:00, 16:00, 17:00</p>
+                <p>• 晚間：19:00, 20:00</p>
+                <div class="pt-2 border-t border-slate-200 text-rose-600 font-bold flex items-center gap-1">
+                  <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+                  <span>週六、週日：固定休診</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 看診重要規範 -->
+        <div class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+          <div class="flex items-center space-x-2 border-b pb-3">
+            <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-600"></i>
+            <div>
+              <h2 class="text-base font-bold text-slate-900">看診重要注意事項</h2>
+              <p class="text-xs text-slate-500">就醫前請詳閱以下規範</p>
+            </div>
+          </div>
+
+          <div class="space-y-2.5 text-xs md:text-sm text-slate-700 leading-relaxed">
+            <div class="flex items-start gap-2.5">
+              <span class="w-5 h-5 rounded-full bg-rose-100 text-rose-700 font-bold flex items-center justify-center text-xs flex-shrink-0 mt-0.5">!</span>
+              <p><strong>初診無照會單不可看診</strong>：依《物理治療師法》法規，初診物理治療<strong>必須備妥醫療院所開立之醫師照會單或轉診單</strong>，若未備妥照會單恕無法進行看診。（肌力訓練項目免照會單）。</p>
+            </div>
+            <div class="flex items-start gap-2.5">
+              <span class="w-5 h-5 rounded-full bg-pine-100 text-pine-800 font-bold flex items-center justify-center text-xs flex-shrink-0 mt-0.5">1</span>
+              <p><strong>完全預約制</strong>：為保障每位病患看診品質與隱私，本所採預約制，請提早 5-10 分鐘抵達。</p>
+            </div>
+            <div class="flex items-start gap-2.5">
+              <span class="w-5 h-5 rounded-full bg-pine-100 text-pine-800 font-bold flex items-center justify-center text-xs flex-shrink-0 mt-0.5">2</span>
+              <p><strong>穿著建議</strong>：建議穿著寬鬆、方便活動伸展之運動衣褲。</p>
+            </div>
+            <div class="flex items-start gap-2.5">
+              <span class="w-5 h-5 rounded-full bg-pine-100 text-pine-800 font-bold flex items-center justify-center text-xs flex-shrink-0 mt-0.5">3</span>
+              <p><strong>取消規範</strong>：若不克前往，請於<strong>看診前 24 小時</strong>在 LINE 上點選取消或致電告知，時段將即時釋出給其他病友。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 5: 我的預約 ================= -->
+      <section id="tab-mybookings" class="tab-pane hidden space-y-4 max-w-2xl mx-auto">
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+          <div class="flex items-center justify-between border-b pb-3">
+            <div class="flex items-center space-x-2">
+              <i data-lucide="calendar-check" class="w-5 h-5 text-pine-700"></i>
+              <div>
+                <h2 class="text-base font-bold text-slate-900">我的預約紀錄</h2>
+                <p class="text-xs text-slate-500">可查詢掛號狀態與 24H 出席確認</p>
+              </div>
+            </div>
+            <button onclick="loadMyAppointments()" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <!-- Appointments List -->
+          <div id="myAppointmentsList" class="space-y-3">
+            <div class="py-12 text-center text-slate-400 text-xs">正在載入預約紀錄...</div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Bottom Navigation Bar (Visible on mobile only, hidden on md) -->
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-slate-200 z-40 pb-safe">
+      <div class="grid grid-cols-6 py-2">
+        <button onclick="switchTab('booking')" id="nav-booking" class="flex flex-col items-center justify-center text-pine-700 font-bold transition">
+          <i data-lucide="calendar-plus" class="w-4 h-4"></i>
+          <span class="text-[9px] mt-1">預約掛號</span>
+        </button>
+        <button onclick="switchTab('intro')" id="nav-intro" class="flex flex-col items-center justify-center text-slate-400 hover:text-slate-600 transition">
+          <i data-lucide="building-2" class="w-4 h-4"></i>
+          <span class="text-[9px] mt-1">關於青松</span>
+        </button>
+        <button onclick="switchTab('team')" id="nav-team" class="flex flex-col items-center justify-center text-slate-400 hover:text-slate-600 transition">
+          <i data-lucide="award" class="w-4 h-4"></i>
+          <span class="text-[9px] mt-1">治療師專長</span>
+        </button>
+        <button onclick="switchTab('pricing')" id="nav-pricing" class="flex flex-col items-center justify-center text-slate-400 hover:text-slate-600 transition">
+          <i data-lucide="badge-dollar-sign" class="w-4 h-4"></i>
+          <span class="text-[9px] mt-1">服務收費</span>
+        </button>
+        <button onclick="switchTab('about')" id="nav-about" class="flex flex-col items-center justify-center text-slate-400 hover:text-slate-600 transition">
+          <i data-lucide="info" class="w-4 h-4"></i>
+          <span class="text-[9px] mt-1">門診須知</span>
+        </button>
+        <button onclick="switchTab('mybookings')" id="nav-mybookings" class="flex flex-col items-center justify-center text-slate-400 hover:text-slate-600 transition relative">
+          <i data-lucide="user-check" class="w-4 h-4"></i>
+          <span class="text-[9px] mt-1">我的預約</span>
+          <span id="navBookingBadge" class="hidden absolute top-1 right-2 w-2 h-2 rounded-full bg-pine-600"></span>
+        </button>
+      </div>
+    </nav>
+
+  </div>
+
+  <!-- Client Script -->
+  <script src="/js/app.js?v=20261108f"></script>
+</body>
+</html>
