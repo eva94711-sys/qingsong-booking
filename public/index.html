@@ -410,19 +410,39 @@
               <!-- 姓名 -->
               <div>
                 <label class="block font-bold text-slate-700 mb-1.5">病患姓名 <span class="text-rose-500">*</span></label>
-                <input type="text" id="inputName" placeholder="請填寫真實姓名" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pine-600">
+                <input type="text" id="inputName" placeholder="請填寫真實姓名" value="" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pine-600">
               </div>
 
               <!-- 手機號碼 -->
               <div>
-                <label class="block font-bold text-slate-700 mb-1.5">手機號碼 <span class="text-rose-500">*</span> (接收LINE/簡訊提醒)</label>
-                <input type="tel" id="inputPhone" placeholder="0912-345-678" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pine-600">
+                <label class="block font-bold text-slate-700 mb-1.5">手機號碼 <span class="text-rose-500">*</span> (接收LINE提醒)</label>
+                <input type="tel" id="inputPhone" inputmode="tel" placeholder="請輸入手機號碼 (09xxxxxxxx)" value="" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pine-600">
               </div>
 
-              <!-- 出生年月日 -->
+              <!-- 出生年月日 (卷軸選擇) -->
               <div class="md:col-span-2">
-                <label class="block font-bold text-slate-700 mb-1.5">出生年月日 <span class="text-rose-500">*</span></label>
-                <input type="date" id="inputBirthday" value="1990-01-01" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pine-600">
+                <label class="block font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>出生年月日 <span class="text-rose-500">*</span></span>
+                  <span class="text-[11px] font-normal text-slate-400">點擊滑動卷軸選取 年／月／日</span>
+                </label>
+                <div class="grid grid-cols-12 gap-2">
+                  <div class="col-span-5">
+                    <select id="birthYear" onchange="onBirthdayChange()" class="w-full px-2.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-pine-600 text-slate-800">
+                      <option value="">選擇出生年</option>
+                    </select>
+                  </div>
+                  <div class="col-span-3">
+                    <select id="birthMonth" onchange="onBirthdayChange()" class="w-full px-2 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-pine-600 text-slate-800">
+                      <option value="">月份</option>
+                    </select>
+                  </div>
+                  <div class="col-span-4">
+                    <select id="birthDay" onchange="onBirthdayChange()" class="w-full px-2 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-pine-600 text-slate-800">
+                      <option value="">日期</option>
+                    </select>
+                  </div>
+                </div>
+                <input type="hidden" id="inputBirthday" value="">
               </div>
 
               <!-- 備註說明 -->
@@ -460,6 +480,7 @@
               <div class="flex justify-between"><span class="text-slate-500">照會轉診單狀態：</span><span id="confirmReferral" class="font-bold text-slate-800"></span></div>
               <div class="border-t border-slate-200 my-2 pt-2 flex justify-between"><span class="text-slate-500">病患姓名：</span><span id="confirmName" class="font-bold text-slate-800"></span></div>
               <div class="flex justify-between"><span class="text-slate-500">聯絡電話：</span><span id="confirmPhone" class="font-bold text-slate-800"></span></div>
+              <div class="flex justify-between"><span class="text-slate-500">出生年月日：</span><span id="confirmBirthday" class="font-bold text-slate-800"></span></div>
             </div>
 
             <!-- 看診提醒 -->
@@ -969,7 +990,7 @@ let bookingData = {
   time: '',
   name: '',
   phone: '',
-  birthday: '1990-01-01',
+  birthday: '',
   note: ''
 };
 
@@ -982,6 +1003,7 @@ let bookedSlots = [];
 // Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', async () => {
   lucide.createIcons();
+  populateBirthdaySelectors();
   await initLiff();
   initStep1();         // 初始化第一步（預設未選擇）
   generateDateList();
@@ -1042,10 +1064,102 @@ function switchTestUser(uid, name, phone, birthday) {
   if (name && phone) {
     document.getElementById('inputName').value = name;
     document.getElementById('inputPhone').value = phone;
-    if (birthday) document.getElementById('inputBirthday').value = birthday;
+    if (birthday) setBirthdayFromISO(birthday);
   }
   loadMyAppointments();
   checkPatientMemory();
+}
+
+// --- 出生年月日 滾輪卷軸選擇器 (年、月、日) ---
+function populateBirthdaySelectors() {
+  const yearSelect = document.getElementById('birthYear');
+  const monthSelect = document.getElementById('birthMonth');
+  const daySelect = document.getElementById('birthDay');
+  if (!yearSelect || !monthSelect || !daySelect) return;
+
+  yearSelect.innerHTML = '<option value="">選擇出生年</option>';
+  monthSelect.innerHTML = '<option value="">選擇月</option>';
+  daySelect.innerHTML = '<option value="">選擇日</option>';
+
+  const currentYear = new Date().getFullYear();
+  for (let y = currentYear; y >= 1920; y--) {
+    const opt = document.createElement('option');
+    opt.value = y;
+    const minguo = y - 1911;
+    const minguoText = minguo > 0 ? `民國${minguo}年` : `民國前${Math.abs(minguo - 1)}年`;
+    opt.textContent = `${y} 年 (${minguoText})`;
+    yearSelect.appendChild(opt);
+  }
+
+  for (let m = 1; m <= 12; m++) {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = `${m} 月`;
+    monthSelect.appendChild(opt);
+  }
+
+  updateBirthdayDays();
+}
+
+function updateBirthdayDays() {
+  const yearSelect = document.getElementById('birthYear');
+  const monthSelect = document.getElementById('birthMonth');
+  const daySelect = document.getElementById('birthDay');
+  if (!daySelect) return;
+
+  const currentVal = daySelect.value;
+  const y = parseInt(yearSelect.value, 10);
+  const m = parseInt(monthSelect.value, 10);
+  let maxDays = 31;
+  if (y && m) {
+    maxDays = new Date(y, m, 0).getDate();
+  }
+
+  daySelect.innerHTML = '<option value="">選擇日</option>';
+  for (let d = 1; d <= maxDays; d++) {
+    const opt = document.createElement('option');
+    opt.value = d;
+    opt.textContent = `${d} 日`;
+    if (parseInt(currentVal, 10) === d) {
+      opt.selected = true;
+    }
+    daySelect.appendChild(opt);
+  }
+}
+
+function onBirthdayChange() {
+  updateBirthdayDays();
+  const y = document.getElementById('birthYear').value;
+  const m = document.getElementById('birthMonth').value;
+  const d = document.getElementById('birthDay').value;
+  const hiddenInput = document.getElementById('inputBirthday');
+  if (y && m && d) {
+    const mm = String(m).padStart(2, '0');
+    const dd = String(d).padStart(2, '0');
+    hiddenInput.value = `${y}-${mm}-${dd}`;
+    bookingData.birthday = hiddenInput.value;
+  } else {
+    hiddenInput.value = '';
+    bookingData.birthday = '';
+  }
+}
+
+function setBirthdayFromISO(isoStr) {
+  if (!isoStr) return;
+  const parts = isoStr.split('-');
+  if (parts.length === 3) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    const d = parseInt(parts[2], 10);
+    const ySel = document.getElementById('birthYear');
+    const mSel = document.getElementById('birthMonth');
+    if (ySel) ySel.value = y;
+    if (mSel) mSel.value = m;
+    updateBirthdayDays();
+    const dSel = document.getElementById('birthDay');
+    if (dSel) dSel.value = d;
+    onBirthdayChange();
+  }
 }
 
 // --- Check Saved Patient Details (LINE UID Memory) ---
@@ -1057,13 +1171,7 @@ async function checkPatientMemory() {
       window.cachedPatientData = data.patient;
       const btn = document.getElementById('btnAutofill');
       if (btn) btn.classList.remove('hidden');
-      if (!document.getElementById('inputName').value) {
-        document.getElementById('inputName').value = data.patient.name || '';
-        document.getElementById('inputPhone').value = data.patient.phone || '';
-        if (data.patient.birthday) {
-          document.getElementById('inputBirthday').value = data.patient.birthday;
-        }
-      }
+      // 保持個人資料輸入框完全空白，讓病患自行填寫或自主點擊「帶入上次資料」
     }
   } catch (e) {
     console.error('Failed to load patient memory', e);
@@ -1075,7 +1183,7 @@ function autoFillPatientData() {
     document.getElementById('inputName').value = window.cachedPatientData.name || '';
     document.getElementById('inputPhone').value = window.cachedPatientData.phone || '';
     if (window.cachedPatientData.birthday) {
-      document.getElementById('inputBirthday').value = window.cachedPatientData.birthday;
+      setBirthdayFromISO(window.cachedPatientData.birthday);
     }
   }
 }
@@ -1304,8 +1412,10 @@ function goToStep(step) {
   } else if (step === 4) {
     bookingData.name = document.getElementById('inputName').value.trim();
     bookingData.phone = document.getElementById('inputPhone').value.trim();
-    bookingData.birthday = document.getElementById('inputBirthday').value;
-    bookingData.note = document.getElementById('inputNote').value.trim();
+
+    const bYear = document.getElementById('birthYear').value;
+    const bMonth = document.getElementById('birthMonth').value;
+    const bDay = document.getElementById('birthDay').value;
 
     if (!bookingData.name) {
       alert('請填寫病患姓名');
@@ -1317,6 +1427,18 @@ function goToStep(step) {
       document.getElementById('inputPhone').focus();
       return;
     }
+    if (!bYear || !bMonth || !bDay) {
+      alert('請滑動卷軸選取完整的出生年月日（年、月、日）');
+      document.getElementById('birthYear').focus();
+      return;
+    }
+
+    const mm = String(bMonth).padStart(2, '0');
+    const dd = String(bDay).padStart(2, '0');
+    bookingData.birthday = `${bYear}-${mm}-${dd}`;
+    document.getElementById('inputBirthday').value = bookingData.birthday;
+
+    bookingData.note = document.getElementById('inputNote').value.trim();
 
     // Populate confirmation step
     document.getElementById('confirmDate').textContent = bookingData.date;
@@ -1338,6 +1460,12 @@ function goToStep(step) {
 
     document.getElementById('confirmName').textContent = bookingData.name;
     document.getElementById('confirmPhone').textContent = bookingData.phone;
+    const cfBirthday = document.getElementById('confirmBirthday');
+    if (cfBirthday) {
+      const mYear = parseInt(bYear, 10) - 1911;
+      const mText = mYear > 0 ? `民國${mYear}年` : '';
+      cfBirthday.textContent = `${bookingData.birthday} ${mText ? `(${mText})` : ''}`;
+    }
   }
 
   currentStep = step;
