@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>青松物理治療所 - 門診預約管理後台</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            pine: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              200: '#bbf7d0',
+              300: '#86efac',
+              400: '#4ade80',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+              800: '#166534',
+              900: '#14532d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+  <!-- Admin Header -->
+  <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-50 shadow-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-xl bg-pine-600 flex items-center justify-center text-white shadow-sm">
+          <i data-lucide="trees" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base font-bold tracking-tight">青松物理治療所</h1>
+            <span class="text-[11px] bg-pine-800 text-pine-200 border border-pine-700 px-2 py-0.5 rounded-md font-mono">管理後台 v1.0</span>
+          </div>
+          <p class="text-xs text-slate-400">高雄市鳥松區華美路69號 · 門診排班與預約營運中心</p>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="flex items-center space-x-2.5">
+        <a href="/" target="_blank" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 border border-slate-700 transition">
+          <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+          <span>開啟病患端 LIFF</span>
+        </a>
+        <button onclick="openNewModal()" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-pine-600 hover:bg-pine-700 text-xs font-bold text-white shadow-sm transition">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>新增預約掛號</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Bar -->
+  <div class="bg-white border-b border-slate-200 sticky top-[61px] z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-6 text-sm font-medium">
+      <button onclick="switchAdminTab('appointments')" id="tabBtn-appointments" class="py-3 border-b-2 border-pine-700 text-pine-700 font-bold flex items-center gap-1.5">
+        <i data-lucide="calendar" class="w-4 h-4"></i>
+        <span>預約名冊與日程</span>
+      </button>
+      <button onclick="switchAdminTab('reminders')" id="tabBtn-reminders" class="py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-1.5">
+        <i data-lucide="bell-ring" class="w-4 h-4"></i>
+        <span>24H 自動推播與確認監控</span>
+        <span id="pendingBadge" class="hidden ml-1 px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">待確認</span>
+      </button>
+      <button onclick="switchAdminTab('schedules')" id="tabBtn-schedules" class="py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-1.5">
+        <i data-lucide="clock" class="w-4 h-4"></i>
+        <span>治療師排班與時段</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Content Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 space-y-6 w-full">
+
+    <!-- KPI Stats Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
+      <!-- Total Active -->
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+        <div class="text-xs text-slate-500 font-medium">有效預約總數</div>
+        <div class="text-2xl font-bold text-slate-900 mt-1" id="statTotal">-</div>
+      </div>
+      <!-- Today's -->
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+        <div class="text-xs text-slate-500 font-medium">今日預約看診</div>
+        <div class="text-2xl font-bold text-pine-700 mt-1" id="statToday">-</div>
+      </div>
+      <!-- Confirmed -->
+      <div class="bg-white p-4 rounded-xl border border-emerald-200 bg-emerald-50/20 shadow-xs">
+        <div class="text-xs text-emerald-800 font-medium flex items-center gap-1">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span> 已確認出席
+        </div>
+        <div class="text-2xl font-bold text-emerald-700 mt-1" id="statConfirmed">-</div>
+      </div>
+      <!-- Tomorrow Pending -->
+      <div class="bg-white p-4 rounded-xl border border-amber-200 bg-amber-50/30 shadow-xs">
+        <div class="text-xs text-amber-800 font-medium flex items-center gap-1">
+          <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> 24H 待確認
+        </div>
+        <div class="text-2xl font-bold text-amber-700 mt-1" id="statTomorrowPending">-</div>
+      </div>
+      <!-- Cancelled -->
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+        <div class="text-xs text-slate-500 font-medium">已取消時段</div>
+        <div class="text-2xl font-bold text-slate-400 mt-1" id="statCancelled">-</div>
+      </div>
+    </div>
+
+    <!-- TAB 1: 預約名冊與日程 -->
+    <div id="adminTab-appointments" class="space-y-4">
+      
+      <!-- Filter Toolbar -->
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-2.5 text-xs">
+          <!-- Date Filter -->
+          <div class="flex items-center space-x-1.5">
+            <span class="font-bold text-slate-600">日期：</span>
+            <input type="date" id="filterDate" onchange="loadAppointments()" class="px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-pine-600 focus:outline-none">
+            <button onclick="clearDateFilter()" class="text-slate-400 hover:text-slate-700 text-xs underline">看全部</button>
+          </div>
+
+          <!-- Therapist Filter -->
+          <div class="flex items-center space-x-1.5">
+            <span class="font-bold text-slate-600">治療師：</span>
+            <select id="filterTherapist" onchange="loadAppointments()" class="px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-pine-600 focus:outline-none">
+              <option value="all">全所治療師 (全部)</option>
+              <option value="th_liu">劉韋綸 院長</option>
+              <option value="th_hong">洪嘉良 物理治療師</option>
+            </select>
+          </div>
+
+          <!-- Status Filter -->
+          <div class="flex items-center space-x-1.5">
+            <span class="font-bold text-slate-600">狀態：</span>
+            <select id="filterStatus" onchange="loadAppointments()" class="px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-pine-600 focus:outline-none">
+              <option value="all">全部狀態</option>
+              <option value="CONFIRMED">🟢 已確認出席</option>
+              <option value="PENDING_CONFIRM">🟠 24H待確認</option>
+              <option value="RESERVED">⚪ 預約成功(待排程)</option>
+              <option value="CANCELLED">🔴 已取消</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Export CSV Button -->
+        <div>
+          <a href="/api/admin/export" download class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded-lg text-xs font-bold transition">
+            <i data-lucide="download" class="w-3.5 h-3.5 text-slate-600"></i>
+            <span>匯出預約名冊 (CSV/Excel)</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Appointments Table -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-slate-200 text-xs text-left">
+            <thead class="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider">
+              <tr>
+                <th class="px-4 py-3">看診時間</th>
+                <th class="px-4 py-3">治療師</th>
+                <th class="px-4 py-3">病患姓名 / 電話</th>
+                <th class="px-4 py-3">就診類別</th>
+                <th class="px-4 py-3">照會轉診單</th>
+                <th class="px-4 py-3">出席狀態</th>
+                <th class="px-4 py-3">主訴 / 備註</th>
+                <th class="px-4 py-3 text-right">管理操作</th>
+              </tr>
+            </thead>
+            <tbody id="appointmentsTableBody" class="divide-y divide-slate-100">
+              <tr>
+                <td colspan="8" class="px-4 py-8 text-center text-slate-400">正在讀取預約資料...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: 24H 自動推播與確認監控 -->
+    <div id="adminTab-reminders" class="hidden space-y-4">
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
+        <div class="flex items-start justify-between">
+          <div>
+            <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <i data-lucide="bell" class="w-4 h-4 text-pine-700"></i> 24 小時前看診出席自動確認機制
+            </h2>
+            <p class="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
+              系統將動態根據每位病患的看診時間回推 24 小時，自動發送 LINE Flex 互動卡片詢問「明天是否會來？」。若病患點擊【無法前往】，系統即時將狀態改為已取消並釋出該時段；若就診前仍未回覆，狀態將呈現橘黃色「待確認」，供櫃檯主動關懷。
+            </p>
+          </div>
+          <button onclick="trigger24hReminders()" id="btnTriggerCron" class="inline-flex items-center gap-1.5 px-4 py-2 bg-pine-700 hover:bg-pine-800 text-white font-bold rounded-lg text-xs shadow-sm transition">
+            <i data-lucide="play" class="w-4 h-4"></i>
+            <span>立即執行 24H 掃描與推播</span>
+          </button>
+        </div>
+
+        <div id="cronResultBox" class="hidden p-3 bg-pine-50 border border-pine-200 rounded-xl text-xs text-pine-900"></div>
+
+        <!-- LINE Flex Message Interactive Visualizer -->
+        <div class="pt-4 border-t border-slate-200">
+          <h3 class="text-xs font-bold text-slate-700 mb-3 flex items-center gap-1.5">
+            <i data-lucide="smartphone" class="w-4 h-4 text-emerald-600"></i> 病患端收到的 LINE Flex 卡片樣式與即時互動測試：
+          </h3>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Simulated Flex Bubble -->
+            <div class="max-w-sm rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-white">
+              <div class="bg-emerald-800 p-4 text-white">
+                <div class="text-[11px] font-bold text-emerald-200 tracking-wider">🌲 青松物理治療所</div>
+                <div class="text-base font-bold mt-1">明日看診出席確認通知</div>
+              </div>
+              <div class="p-4 space-y-3 text-xs text-slate-700">
+                <p class="font-bold text-slate-900">親愛的 陳雅婷 您好：</p>
+                <p class="text-slate-500">提醒您明日有安排物理治療預約，為確保治療師專屬為您保留時段，請協助點擊下方按鈕確認：</p>
+                <div class="p-2.5 bg-slate-50 rounded-lg space-y-1 text-slate-600 border border-slate-100">
+                  <div class="font-bold text-emerald-800">🗓 預約時間：明日 10:00</div>
+                  <div>👨‍⚕️ 負責治療師：劉韋綸 院長</div>
+                  <div>👕 建議穿著：寬鬆運動衣褲</div>
+                  <div>📍 高雄市鳥松區華美路69號 (07-7353353)</div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 pt-2">
+                  <button onclick="simulateLinePostback('confirm')" class="py-2.5 bg-pine-700 hover:bg-pine-800 text-white font-bold rounded-lg text-xs transition text-center shadow-xs">
+                    ✅ 會準時前往
+                  </button>
+                  <button onclick="simulateLinePostback('cancel')" class="py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold rounded-lg text-xs transition text-center">
+                    ❌ 無法前往/取消
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Explanation -->
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 text-xs text-slate-600">
+              <div class="font-bold text-slate-800">互動按鈕與後台狀態連動邏輯：</div>
+              <div class="flex items-start gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 mt-1 flex-shrink-0"></span>
+                <p><strong>點選【會準時前往】</strong>：狀態立即更新為 <code>CONFIRMED</code>（綠色），後台日程顯示已確認出席，治療師放心備診。</p>
+              </div>
+              <div class="flex items-start gap-2">
+                <span class="w-2 h-2 rounded-full bg-rose-500 mt-1 flex-shrink-0"></span>
+                <p><strong>點選【無法前往/取消】</strong>：狀態立即更新為 <code>CANCELLED</code>（紅色），<strong>資料庫即刻釋放該時段</strong>，供其他在 LINE 預約的病友掛號！</p>
+              </div>
+              <div class="flex items-start gap-2">
+                <span class="w-2 h-2 rounded-full bg-amber-500 mt-1 flex-shrink-0"></span>
+                <p><strong>未點選任何按鈕</strong>：看診前維持 <code>PENDING_CONFIRM</code>（橘黃色高亮），櫃檯人員可一鍵撥號確認。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- TAB 3: 治療師排班與時段 -->
+    <div id="adminTab-schedules" class="hidden space-y-4">
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
+        <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+          <i data-lucide="calendar-range" class="w-4 h-4 text-pine-700"></i> 青松物理治療所 - 兩位治療師排班控管
+        </h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Therapist 1: 劉院長 -->
+          <div class="p-4 rounded-xl border border-pine-200 bg-pine-50/20 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2.5">
+                <img src="/images/therapist_liu.svg" class="w-9 h-9 rounded-full border border-pine-300" alt="劉韋綸">
+                <div>
+                  <h3 class="font-bold text-sm text-slate-900">劉韋綸 院長</h3>
+                  <span class="text-[11px] text-pine-700">在診狀態：正常門診中</span>
+                </div>
+              </div>
+              <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">排班生效中</span>
+            </div>
+            <div class="text-xs text-slate-600 space-y-1">
+              <div>常態排班：週一至週五 (全日) · 週六 (上午/下午)</div>
+              <div>專長門診：骨骼肌肉徒手、動作控制、院長指定治療</div>
+            </div>
+          </div>
+
+          <!-- Therapist 2: 洪治療師 -->
+          <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2.5">
+                <img src="/images/therapist_hong.png" class="w-9 h-9 rounded-full object-cover object-top border border-slate-300" alt="洪嘉良">
+                <div>
+                  <h3 class="font-bold text-sm text-slate-900">洪嘉良 物理治療師</h3>
+                  <span class="text-[11px] text-slate-600">在診狀態：正常門診中</span>
+                </div>
+              </div>
+              <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">排班生效中</span>
+            </div>
+            <div class="text-xs text-slate-600 space-y-1">
+              <div>常態排班：週一至週五 (全日) · 週六 (上午/下午)</div>
+              <div>專長門診：皮拉提斯器械、肌肉骨骼、術後復健、疤痕手療</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
+          <div class="font-bold text-slate-800">全所門診常態營業時段（週一至週五，週六日休診）：</div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-slate-600">
+            <div class="bg-white p-2.5 rounded-lg border"><strong>上午時段：</strong>09:00, 10:00, 11:00</div>
+            <div class="bg-white p-2.5 rounded-lg border"><strong>下午時段：</strong>15:00, 16:00, 17:00</div>
+            <div class="bg-white p-2.5 rounded-lg border"><strong>晚間時段：</strong>19:00, 20:00</div>
+          </div>
+          <p class="text-rose-600 font-bold mt-2">* 星期六、星期日為固定休診日；若有特定假期或請假，可在此調整。</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Modal: 新增預約 (手動現場/電話掛號) -->
+  <div id="newAppointmentModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b pb-3">
+        <h3 class="font-bold text-sm text-slate-900 flex items-center gap-1.5">
+          <i data-lucide="user-plus" class="w-4 h-4 text-pine-700"></i> 手動新增預約掛號 (櫃檯用)
+        </h3>
+        <button onclick="closeNewModal()" class="p-1 hover:bg-slate-100 rounded-full">
+          <i data-lucide="x" class="w-4 h-4 text-slate-500"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">病患姓名 *</label>
+          <input type="text" id="manualName" placeholder="例如：王大明" class="w-full px-3 py-2 border rounded-lg">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">聯絡電話 *</label>
+          <input type="tel" id="manualPhone" placeholder="0912-345-678" class="w-full px-3 py-2 border rounded-lg">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">看診日期 *</label>
+            <input type="date" id="manualDate" class="w-full px-3 py-2 border rounded-lg">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">時段 *</label>
+            <select id="manualTime" class="w-full px-3 py-2 border rounded-lg">
+              <option value="09:00">09:00</option>
+              <option value="10:00">10:00</option>
+              <option value="11:00">11:00</option>
+              <option value="15:00">15:00</option>
+              <option value="16:00">16:00</option>
+              <option value="17:00">17:00</option>
+              <option value="19:00">19:00</option>
+              <option value="20:00">20:00</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">治療師 *</label>
+            <select id="manualTherapist" class="w-full px-3 py-2 border rounded-lg">
+              <option value="any">不指定 (由系統排)</option>
+              <option value="th_liu">劉韋綸 院長</option>
+              <option value="th_hong">洪嘉良 物理治療師</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">就診類別</label>
+            <select id="manualVisitType" class="w-full px-3 py-2 border rounded-lg">
+              <option value="FIRST_VISIT">初診評估</option>
+              <option value="FOLLOW_UP">複診追蹤</option>
+              <option value="FITNESS">肌力訓練</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">備註說明</label>
+          <input type="text" id="manualNote" placeholder="電話現場預約備註" class="w-full px-3 py-2 border rounded-lg">
+        </div>
+      </div>
+
+      <div class="flex space-x-2 pt-2 border-t">
+        <button onclick="closeNewModal()" class="w-1/3 py-2 border rounded-lg text-slate-600 font-bold hover:bg-slate-50 transition text-xs">取消</button>
+        <button onclick="submitManualAppointment()" class="w-2/3 py-2 bg-pine-700 hover:bg-pine-800 text-white font-bold rounded-lg transition text-xs shadow-sm">送出新增</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allAppointments = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      loadStats();
+      loadAppointments();
+      // Set default manual date to tomorrow
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      document.getElementById('manualDate').value = tomorrow.toISOString().split('T')[0];
+    });
+
+    function switchAdminTab(tabId) {
+      ['appointments', 'reminders', 'schedules'].forEach(t => {
+        const pane = document.getElementById(`adminTab-${t}`);
+        const btn = document.getElementById(`tabBtn-${t}`);
+        if (t === tabId) {
+          pane.classList.remove('hidden');
+          btn.classList.add('border-pine-700', 'text-pine-700', 'font-bold');
+          btn.classList.remove('border-transparent', 'text-slate-500');
+        } else {
+          pane.classList.add('hidden');
+          btn.classList.remove('border-pine-700', 'text-pine-700', 'font-bold');
+          btn.classList.add('border-transparent', 'text-slate-500');
+        }
+      });
+      lucide.createIcons();
+    }
+
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/admin/stats');
+        const data = await res.json();
+        document.getElementById('statTotal').textContent = data.total_active || 0;
+        document.getElementById('statToday').textContent = data.today_count || 0;
+        document.getElementById('statConfirmed').textContent = data.confirmed_count || 0;
+        document.getElementById('statTomorrowPending').textContent = data.tomorrow_pending || 0;
+        document.getElementById('statCancelled').textContent = data.cancelled_count || 0;
+
+        const badge = document.getElementById('pendingBadge');
+        if (data.tomorrow_pending > 0) {
+          badge.textContent = `${data.tomorrow_pending} 待確認`;
+          badge.classList.remove('hidden');
+        } else {
+          badge.classList.add('hidden');
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function loadAppointments() {
+      const dateVal = document.getElementById('filterDate').value;
+      const thVal = document.getElementById('filterTherapist').value;
+      const stVal = document.getElementById('filterStatus').value;
+
+      let url = `/api/admin/appointments?`;
+      if (dateVal) url += `date=${dateVal}&`;
+      if (thVal) url += `therapist_id=${thVal}&`;
+      if (stVal) url += `status=${stVal}&`;
+
+      const tbody = document.getElementById('appointmentsTableBody');
+      tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">正在查詢資料...</td></tr>';
+
+      try {
+        const res = await fetch(url);
+        allAppointments = await res.json();
+
+        if (allAppointments.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">尚無符合條件的預約掛號紀錄</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = '';
+        allAppointments.forEach(apt => {
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-slate-50 transition';
+
+          let statusBadge = '';
+          if (apt.status === 'CONFIRMED') {
+            statusBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>已確認出席</span>';
+          } else if (apt.status === 'PENDING_CONFIRM') {
+            statusBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>24H待確認</span>';
+          } else if (apt.status === 'CANCELLED') {
+            statusBadge = '<span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium">已取消</span>';
+          } else {
+            statusBadge = '<span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium">已預約(待排程)</span>';
+          }
+
+          let typeLabel = '初診';
+          if (apt.visit_type === 'FOLLOW_UP') typeLabel = '複診';
+          if (apt.visit_type === 'FITNESS') typeLabel = '肌力訓練';
+
+          tr.innerHTML = `
+            <td class="px-4 py-3 font-medium text-slate-900 whitespace-nowrap">
+              <div class="font-bold text-xs">${apt.appointment_date}</div>
+              <div class="text-pine-700 font-extrabold">${apt.appointment_time}</div>
+            </td>
+            <td class="px-4 py-3 whitespace-nowrap font-bold text-slate-800">
+              ${apt.therapist_name}
+            </td>
+            <td class="px-4 py-3 whitespace-nowrap">
+              <div class="font-bold text-slate-900">${apt.patient_name}</div>
+              <a href="tel:${apt.patient_phone}" class="text-pine-700 hover:underline flex items-center gap-0.5">
+                <i data-lucide="phone" class="w-3 h-3"></i> ${apt.patient_phone}
+              </a>
+            </td>
+            <td class="px-4 py-3 whitespace-nowrap text-slate-700">
+              <span class="px-2 py-0.5 rounded-md bg-slate-100 text-[11px] font-medium">${typeLabel}</span>
+            </td>
+            <td class="px-4 py-3 whitespace-nowrap text-slate-700">
+              ${apt.has_referral_slip ? '<span class="text-emerald-700 font-bold">✓ 有照會單</span>' : '<span class="text-slate-400">無</span>'}
+            </td>
+            <td class="px-4 py-3 whitespace-nowrap">
+              ${statusBadge}
+            </td>
+            <td class="px-4 py-3 text-slate-500 max-w-xs truncate" title="${apt.patient_note || ''}">
+              ${apt.patient_note || '-'}
+            </td>
+            <td class="px-4 py-3 whitespace-nowrap text-right space-x-1">
+              ${apt.status !== 'CONFIRMED' && apt.status !== 'CANCELLED' ? `
+                <button onclick="updateAptStatus('${apt.id}', 'CONFIRMED')" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold">
+                  確認出席
+                </button>
+              ` : ''}
+              ${apt.status !== 'CANCELLED' ? `
+                <button onclick="updateAptStatus('${apt.id}', 'CANCELLED')" class="px-2 py-1 border border-rose-200 text-rose-600 hover:bg-rose-50 rounded text-[11px] font-bold">
+                  取消
+                </button>
+              ` : '<span class="text-slate-400 text-[11px]">已結案</span>'}
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+        lucide.createIcons();
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-rose-500">載入失敗</td></tr>';
+      }
+    }
+
+    function clearDateFilter() {
+      document.getElementById('filterDate').value = '';
+      loadAppointments();
+    }
+
+    async function updateAptStatus(aptId, status) {
+      if (status === 'CANCELLED' && !confirm('確定要取消此筆預約並釋放時段嗎？')) return;
+      try {
+        await fetch(`/api/admin/appointments/${aptId}/status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status })
+        });
+        loadAppointments();
+        loadStats();
+      } catch (e) {
+        alert('狀態更新失敗');
+      }
+    }
+
+    async function trigger24hReminders() {
+      const btn = document.getElementById('btnTriggerCron');
+      btn.disabled = true;
+      btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>掃描中...</span>';
+      lucide.createIcons();
+
+      try {
+        const res = await fetch('/api/reminders/check-and-send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        const result = await res.json();
+        const box = document.getElementById('cronResultBox');
+        box.classList.remove('hidden');
+        box.innerHTML = `
+          <strong>掃描完成！</strong> 於 ${result.checked_at} 觸發檢查，本次共篩選出 <strong>${result.processed_count}</strong> 位預約在未來 24 小時之病患，已推播 LINE Flex 出席確認卡片並將狀態更新為「24H 待確認」。
+        `;
+        loadAppointments();
+        loadStats();
+      } catch (e) {
+        alert('執行失敗');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="play" class="w-4 h-4"></i><span>立即執行 24H 掃描與推播</span>';
+        lucide.createIcons();
+      }
+    }
+
+    async function simulateLinePostback(action) {
+      try {
+        const res = await fetch('/api/line/webhook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            events: [{
+              type: 'postback',
+              postback: {
+                data: `action=${action}&apt_id=APT${new Date().toISOString().split('T')[0].replace(/-/g,'')}002`
+              }
+            }]
+          })
+        });
+        const data = await res.json();
+        alert(`模擬成功！病患已於 LINE 點擊【${action === 'confirm' ? '會準時前往' : '無法前往'}】，狀態已即時連動更新至後台！`);
+        loadAppointments();
+        loadStats();
+      } catch (e) {
+        alert('模擬連動失敗');
+      }
+    }
+
+    function openNewModal() {
+      document.getElementById('newAppointmentModal').classList.remove('hidden');
+    }
+    function closeNewModal() {
+      document.getElementById('newAppointmentModal').classList.add('hidden');
+    }
+
+    async function submitManualAppointment() {
+      const name = document.getElementById('manualName').value.trim();
+      const phone = document.getElementById('manualPhone').value.trim();
+      const date = document.getElementById('manualDate').value;
+      const time = document.getElementById('manualTime').value;
+      const therapistId = document.getElementById('manualTherapist').value;
+      const visitType = document.getElementById('manualVisitType').value;
+      const note = document.getElementById('manualNote').value.trim();
+
+      if (!name || !phone || !date || !time) {
+        alert('請完整填寫姓名、電話、日期與時段');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/appointments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            patient_name: name,
+            patient_phone: phone,
+            appointment_date: date,
+            appointment_time: time,
+            therapist_id: therapistId,
+            visit_type: visitType,
+            has_referral_slip: true,
+            patient_note: note || '櫃檯現場/電話手動掛號'
+          })
+        });
+        const data = await res.json();
+        if (data.error) {
+          alert(data.error);
+          return;
+        }
+        alert('新增掛號成功！');
+        closeNewModal();
+        loadAppointments();
+        loadStats();
+      } catch (e) {
+        alert('新增失敗');
+      }
+    }
+  </script>
+</body>
+</html>
