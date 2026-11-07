@@ -950,6 +950,853 @@
   </div>
 
   <!-- Client Script -->
-  <script src="/js/app.js?v=20261108f"></script>
+  <script>
+// State Management
+let currentTab = 'booking';
+let currentStep = 1;
+let currentLineUser = {
+  userId: 'U_DEMO_001',
+  displayName: '陳雅婷',
+  pictureUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=qingsong'
+};
+
+let bookingData = {
+  visitType: '',       // 未選擇
+  hasReferral: null,   // 未選擇（null = 未填）
+  therapistId: 'th_liu',
+  therapistName: '劉韋綸 院長',
+  date: '',
+  time: '',
+  name: '',
+  phone: '',
+  birthday: '1990-01-01',
+  note: ''
+};
+
+// 固定 8 個時段（前端直接定義，不依賴後端 API）
+const FIXED_SLOTS = ['09:00', '10:00', '11:00', '15:00', '16:00', '17:00', '19:00', '20:00'];
+
+// 已被預約的時段（由後端取得，失敗時留空）
+let bookedSlots = [];
+
+// Initialize on DOM ready
+document.addEventListener('DOMContentLoaded', async () => {
+  lucide.createIcons();
+  await initLiff();
+  initStep1();         // 初始化第一步（預設未選擇）
+  generateDateList();
+  checkPatientMemory();
+  loadMyAppointments();
+});
+
+// --- LINE LIFF Initialization ---
+async function initLiff() {
+  const LIFF_ID = '2012458374-x8h6v4Dh';
+  try {
+    if (window.liff) {
+      await liff.init({ liffId: LIFF_ID });
+      if (liff.isInClient() && liff.isLoggedIn()) {
+        const profile = await liff.getProfile();
+        currentLineUser.userId = profile.userId;
+        currentLineUser.displayName = profile.displayName;
+        if (profile.pictureUrl) {
+          currentLineUser.pictureUrl = profile.pictureUrl;
+        }
+        updateUserUI();
+      } else {
+        const savedUser = localStorage.getItem('qingsong_test_user');
+        if (savedUser) {
+          currentLineUser = JSON.parse(savedUser);
+        }
+        updateUserUI();
+      }
+    }
+  } catch (err) {
+    console.warn('LIFF init fallback:', err);
+    updateUserUI();
+  }
+}
+
+function updateUserUI() {
+  document.getElementById('userName').textContent = currentLineUser.displayName || 'LINE 用戶';
+  document.getElementById('userAvatar').src = currentLineUser.pictureUrl;
+  const uidDisplay = document.getElementById('currentUidDisplay');
+  if (uidDisplay) uidDisplay.textContent = currentLineUser.userId;
+}
+
+function toggleUserSimulator() {
+  const modal = document.getElementById('simModal');
+  modal.classList.toggle('hidden');
+}
+
+function switchTestUser(uid, name, phone, birthday) {
+  currentLineUser = {
+    userId: uid,
+    displayName: name,
+    pictureUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${uid}`
+  };
+  localStorage.setItem('qingsong_test_user', JSON.stringify(currentLineUser));
+  updateUserUI();
+  toggleUserSimulator();
+
+  if (name && phone) {
+    document.getElementById('inputName').value = name;
+    document.getElementById('inputPhone').value = phone;
+    if (birthday) document.getElementById('inputBirthday').value = birthday;
+  }
+  loadMyAppointments();
+  checkPatientMemory();
+}
+
+// --- Check Saved Patient Details (LINE UID Memory) ---
+async function checkPatientMemory() {
+  try {
+    const res = await fetch(`/api/patient?line_user_id=${encodeURIComponent(currentLineUser.userId)}`);
+    const data = await res.json();
+    if (data.found && data.patient) {
+      window.cachedPatientData = data.patient;
+      const btn = document.getElementById('btnAutofill');
+      if (btn) btn.classList.remove('hidden');
+      if (!document.getElementById('inputName').value) {
+        document.getElementById('inputName').value = data.patient.name || '';
+        document.getElementById('inputPhone').value = data.patient.phone || '';
+        if (data.patient.birthday) {
+          document.getElementById('inputBirthday').value = data.patient.birthday;
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load patient memory', e);
+  }
+}
+
+function autoFillPatientData() {
+  if (window.cachedPatientData) {
+    document.getElementById('inputName').value = window.cachedPatientData.name || '';
+    document.getElementById('inputPhone').value = window.cachedPatientData.phone || '';
+    if (window.cachedPatientData.birthday) {
+      document.getElementById('inputBirthday').value = window.cachedPatientData.birthday;
+    }
+  }
+}
+
+// --- Tab Switching (Responsive Desktop & Mobile) ---
+function switchTab(tabId) {
+  currentTab = tabId;
+  document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
+  const targetPane = document.getElementById(`tab-${tabId}`);
+  if (targetPane) targetPane.classList.remove('hidden');
+
+  // Mobile Bottom Nav
+  ['booking', 'intro', 'team', 'pricing', 'about', 'mybookings'].forEach(t => {
+    const navBtn = document.getElementById(`nav-${t}`);
+    if (navBtn) {
+      if (t === tabId) {
+        navBtn.classList.add('text-pine-700', 'font-bold');
+        navBtn.classList.remove('text-slate-400');
+      } else {
+        navBtn.classList.remove('text-pine-700', 'font-bold');
+        navBtn.classList.add('text-slate-400');
+      }
+    }
+  });
+
+  // Desktop Header Nav
+  ['booking', 'intro', 'team', 'pricing', 'about', 'mybookings'].forEach(t => {
+    const dBtn = document.getElementById(`dnav-${t}`);
+    if (dBtn) {
+      if (t === tabId) {
+        dBtn.className = 'px-3 py-1.5 rounded-lg font-bold bg-white text-pine-900 shadow-sm transition whitespace-nowrap';
+      } else {
+        dBtn.className = 'px-3 py-1.5 rounded-lg text-pine-100 hover:text-white hover:bg-white/10 transition whitespace-nowrap';
+      }
+    }
+  });
+
+  if (tabId === 'mybookings') {
+    loadMyAppointments();
+  }
+
+  lucide.createIcons();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// --- Step 1 初始化：預設「未選擇」，強制使用者主動選擇 ---
+function initStep1() {
+  // 清除所有 radio 預選（強制使用者選擇）
+  document.querySelectorAll('input[name="visitType"]').forEach(r => r.checked = false);
+  document.querySelectorAll('input[name="hasReferral"]').forEach(r => r.checked = false);
+
+  // 隱藏照會單區塊（預設初診卡片不突出）
+  ['cardVisitFirst', 'cardVisitFollow', 'cardVisitFitness'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.classList.remove('border-2', 'border-pine-600', 'bg-pine-50/30');
+      el.classList.add('border', 'border-slate-200');
+    }
+  });
+
+  const referralSection = document.getElementById('referralSection');
+  if (referralSection) referralSection.classList.add('hidden');
+
+  const yesTip = document.getElementById('referralYesTip');
+  const noAlert = document.getElementById('referralNoAlert');
+  if (yesTip) yesTip.classList.add('hidden');
+  if (noAlert) noAlert.classList.add('hidden');
+
+  // 下一步按鈕設為不可按
+  setStep1NextAllowed(false, '請先選擇就診類別');
+}
+
+// --- 選擇預約物理治療師 ---
+function onTherapistChange(therapistId, therapistName) {
+  bookingData.therapistId = therapistId;
+  bookingData.therapistName = therapistName;
+
+  const cards = {
+    'th_liu': 'cardTherapistLiu',
+    'th_hong': 'cardTherapistHong'
+  };
+
+  Object.keys(cards).forEach(key => {
+    const el = document.getElementById(cards[key]);
+    if (el) {
+      if (key === therapistId) {
+        el.className = 'flex items-center sm:flex-col sm:items-center justify-between sm:justify-center p-4 border-2 border-pine-700 bg-pine-50/40 rounded-2xl cursor-pointer transition text-center hover:border-pine-600 shadow-xs';
+      } else {
+        el.className = 'flex items-center sm:flex-col sm:items-center justify-between sm:justify-center p-4 border border-slate-200 rounded-2xl cursor-pointer transition text-center hover:border-pine-600';
+      }
+    }
+  });
+
+  // 若第二步已有選日期，重新獲取該治療師的可用時段
+  if (bookingData.date) {
+    fetchSlots(bookingData.date);
+  }
+}
+
+// --- Step 1: Visit Type & Referral Check ---
+function onVisitTypeChange() {
+  const visitRadios = document.getElementsByName('visitType');
+  let selected = '';
+  for (const r of visitRadios) {
+    if (r.checked) selected = r.value;
+  }
+  bookingData.visitType = selected;
+
+  if (!selected) {
+    setStep1NextAllowed(false, '請先選擇就診類別');
+    return;
+  }
+
+  // Highlight active radio card
+  ['First', 'Follow', 'Fitness'].forEach(k => {
+    const card = document.getElementById(`cardVisit${k}`);
+    if (card) {
+      card.classList.remove('border-2', 'border-pine-600', 'bg-pine-50/30');
+      card.classList.add('border', 'border-slate-200');
+    }
+  });
+
+  if (selected === 'FIRST_VISIT') {
+    const card = document.getElementById('cardVisitFirst');
+    if (card) {
+      card.classList.add('border-2', 'border-pine-600', 'bg-pine-50/30');
+      card.classList.remove('border-slate-200');
+    }
+    // 顯示照會單選擇區
+    const referralSection = document.getElementById('referralSection');
+    if (referralSection) referralSection.classList.remove('hidden');
+    // 重設照會單選擇
+    document.querySelectorAll('input[name="hasReferral"]').forEach(r => r.checked = false);
+    bookingData.hasReferral = null;
+    const yesTip = document.getElementById('referralYesTip');
+    const noAlert = document.getElementById('referralNoAlert');
+    if (yesTip) yesTip.classList.add('hidden');
+    if (noAlert) noAlert.classList.add('hidden');
+    setStep1NextAllowed(false, '請選擇是否持有醫師照會單');
+  } else {
+    // 複診或肌力訓練 → 隱藏照會單區，直接允許下一步
+    const referralSection = document.getElementById('referralSection');
+    if (referralSection) referralSection.classList.add('hidden');
+    const cardId = (selected === 'FOLLOW_UP') ? 'cardVisitFollow' : 'cardVisitFitness';
+    const card = document.getElementById(cardId);
+    if (card) {
+      card.classList.add('border-2', 'border-pine-600', 'bg-pine-50/30');
+      card.classList.remove('border-slate-200');
+    }
+    bookingData.hasReferral = (selected === 'FOLLOW_UP') ? true : false;
+    setStep1NextAllowed(true);
+  }
+}
+
+function onReferralChange() {
+  if (bookingData.visitType !== 'FIRST_VISIT') {
+    setStep1NextAllowed(true);
+    return;
+  }
+
+  const referralRadios = document.getElementsByName('hasReferral');
+  let hasRef = null; // null = 未選擇
+  for (const r of referralRadios) {
+    if (r.checked) hasRef = (r.value === 'yes');
+  }
+  bookingData.hasReferral = hasRef;
+
+  const yesTip = document.getElementById('referralYesTip');
+  const noAlert = document.getElementById('referralNoAlert');
+
+  if (hasRef === null) {
+    // 未選擇
+    if (yesTip) yesTip.classList.add('hidden');
+    if (noAlert) noAlert.classList.add('hidden');
+    setStep1NextAllowed(false, '請選擇是否持有醫師照會單');
+  } else if (hasRef) {
+    if (yesTip) yesTip.classList.remove('hidden');
+    if (noAlert) noAlert.classList.add('hidden');
+    setStep1NextAllowed(true);
+  } else {
+    // 沒有照會單 → 嚴格阻擋！
+    if (yesTip) yesTip.classList.add('hidden');
+    if (noAlert) noAlert.classList.remove('hidden');
+    setStep1NextAllowed(false, '無照會單無法進行看診');
+  }
+}
+
+function setStep1NextAllowed(allowed, reasonText) {
+  const btn = document.getElementById('btnStep1Next');
+  const text = document.getElementById('btnStep1NextText');
+  if (!btn || !text) return;
+
+  if (allowed) {
+    btn.disabled = false;
+    btn.classList.remove('bg-slate-300', 'cursor-not-allowed');
+    btn.classList.add('bg-pine-700', 'hover:bg-pine-800');
+    text.textContent = '下一步：選擇預約時段';
+  } else {
+    btn.disabled = true;
+    btn.classList.add('bg-slate-300', 'cursor-not-allowed');
+    btn.classList.remove('bg-pine-700', 'hover:bg-pine-800');
+    text.textContent = reasonText || '無照會單恕無法進入下一步';
+  }
+}
+
+// --- Step Wizard ---
+function goToStep(step) {
+  if (step === 2) {
+    if (bookingData.visitType === 'FIRST_VISIT' && !bookingData.hasReferral) {
+      alert('依物理治療法規規定，初診病患必須持有醫師照會單或轉診單方可掛號看診。');
+      return;
+    }
+    if (!bookingData.visitType) {
+      alert('請先選擇就診類別');
+      return;
+    }
+    // Fetch slots for current date
+    if (bookingData.date) {
+      fetchSlots(bookingData.date);
+    }
+  } else if (step === 3) {
+    if (!bookingData.date || !bookingData.time) {
+      alert('請先選取看診日期與預約時段');
+      return;
+    }
+  } else if (step === 4) {
+    bookingData.name = document.getElementById('inputName').value.trim();
+    bookingData.phone = document.getElementById('inputPhone').value.trim();
+    bookingData.birthday = document.getElementById('inputBirthday').value;
+    bookingData.note = document.getElementById('inputNote').value.trim();
+
+    if (!bookingData.name) {
+      alert('請填寫病患姓名');
+      document.getElementById('inputName').focus();
+      return;
+    }
+    if (!bookingData.phone || bookingData.phone.length < 8) {
+      alert('請填寫有效的手機號碼，以利接收 LINE 預約確認');
+      document.getElementById('inputPhone').focus();
+      return;
+    }
+
+    // Populate confirmation step
+    document.getElementById('confirmDate').textContent = bookingData.date;
+    document.getElementById('confirmTime').textContent = bookingData.time;
+
+    let vLabel = '初診（第一次前來）';
+    if (bookingData.visitType === 'FOLLOW_UP') vLabel = '不是初診（複診追蹤）';
+    if (bookingData.visitType === 'FITNESS') vLabel = '肌力訓練與健康促進';
+    document.getElementById('confirmVisitType').textContent = vLabel;
+
+    let rLabel = bookingData.hasReferral ? '有照會單／轉診單（就診當日攜帶正本）' : '無';
+    if (bookingData.visitType === 'FITNESS') rLabel = '依法規免照會單';
+    document.getElementById('confirmReferral').textContent = rLabel;
+
+    const cfTherapist = document.getElementById('confirmTherapist');
+    if (cfTherapist) {
+      cfTherapist.textContent = bookingData.therapistName || '由診所安排';
+    }
+
+    document.getElementById('confirmName').textContent = bookingData.name;
+    document.getElementById('confirmPhone').textContent = bookingData.phone;
+  }
+
+  currentStep = step;
+  [1, 2, 3, 4].forEach(s => {
+    const el = document.getElementById(`bookingStep${s}`);
+    const dot = document.getElementById(`stepDot${s}`);
+    if (el) {
+      if (s === step) el.classList.remove('hidden');
+      else el.classList.add('hidden');
+    }
+    if (dot) {
+      if (s === step) {
+        dot.className = 'flex items-center space-x-1.5 text-pine-700 font-bold';
+        dot.querySelector('span').className = 'w-6 h-6 rounded-full bg-pine-700 text-white flex items-center justify-center text-xs font-bold';
+      } else if (s < step) {
+        dot.className = 'flex items-center space-x-1.5 text-emerald-600 font-medium';
+        dot.querySelector('span').className = 'w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold';
+      } else {
+        dot.className = 'flex items-center space-x-1.5 text-slate-400';
+        dot.querySelector('span').className = 'w-6 h-6 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs';
+      }
+    }
+  });
+
+  lucide.createIcons();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// --- Date Picker: Open Mon-Fri, Closed Sat & Sun (Only 禮拜六日休息) ---
+function generateDateList() {
+  const container = document.getElementById('datePickerList');
+  if (!container) return;
+  container.innerHTML = '';
+  const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+
+  // 使用本地時間（避免時區問題造成週六顯示錯誤）
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let firstAvailableWeekday = null;
+
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+
+    // 本地時間取星期幾（0=日, 1=一, ..., 5=五, 6=六）
+    const dayOfWeek = d.getDay();
+    // 週六(6) 和 週日(0) 都休診
+    const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+
+    // 轉成 YYYY-MM-DD（本地時間，不用 toISOString 避免時區偏移）
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const dateStr = `${y}-${m}-${day}`;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = `date-btn-${dateStr}`;
+    btn.dataset.date = dateStr;
+    btn.dataset.isWeekend = isWeekend ? 'true' : 'false';
+
+    btn.className = `flex-shrink-0 w-16 py-3 px-1 rounded-2xl border-2 text-center transition flex flex-col items-center justify-center ${
+      isWeekend
+        ? 'border-slate-200 bg-slate-50 text-slate-400 opacity-60 cursor-not-allowed'
+        : 'border-slate-200 bg-white hover:border-pine-600 hover:bg-pine-50 text-slate-800 cursor-pointer'
+    }`;
+
+    btn.innerHTML = `
+      <span class="text-xs font-bold ${isWeekend ? 'text-slate-400' : 'text-slate-500'}">週${weekdays[dayOfWeek]}</span>
+      <span class="text-sm md:text-base font-extrabold my-0.5 ${isWeekend ? 'text-slate-400' : 'text-slate-900'}">${d.getMonth() + 1}/${d.getDate()}</span>
+      <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${isWeekend ? 'text-rose-500 bg-rose-50' : 'text-emerald-700 bg-emerald-50'}">${isWeekend ? '休診' : '可約'}</span>
+    `;
+
+    if (!isWeekend) {
+      btn.onclick = () => selectDate(dateStr, false);
+    }
+    container.appendChild(btn);
+
+    if (!isWeekend && !firstAvailableWeekday) {
+      firstAvailableWeekday = dateStr;
+    }
+  }
+
+  // 自動選取最近一個上班日
+  if (firstAvailableWeekday) {
+    selectDate(firstAvailableWeekday, false);
+  }
+}
+
+function selectDate(dateStr, isWeekend) {
+  bookingData.date = dateStr;
+  bookingData.time = '';
+  document.getElementById('chosenSlotText').textContent = '';
+  document.getElementById('slotSelectedAlert').classList.add('hidden');
+  document.getElementById('btnToStep3').disabled = true;
+
+  // Refresh all date buttons styling
+  document.querySelectorAll('#datePickerList button').forEach(b => {
+    const bWeekend = (b.dataset.isWeekend === 'true');
+    if (b.dataset.date === dateStr) {
+      b.className = 'flex-shrink-0 w-16 py-3 px-1 rounded-2xl border-2 border-pine-700 bg-pine-700 text-white shadow-md transition flex flex-col items-center justify-center cursor-pointer';
+      // 解析日期（本地時間）
+      const parts = b.dataset.date.split('-');
+      const dObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      const wds = ['日', '一', '二', '三', '四', '五', '六'];
+      b.innerHTML = `
+        <span class="text-xs font-bold text-white">週${wds[dObj.getDay()]}</span>
+        <span class="text-sm md:text-base font-extrabold my-0.5 text-white">${dObj.getMonth() + 1}/${dObj.getDate()}</span>
+        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${bWeekend ? 'text-rose-200 bg-rose-600' : 'text-pine-200 bg-pine-800'}">${bWeekend ? '休診' : '已選'}</span>
+      `;
+    } else {
+      b.className = `flex-shrink-0 w-16 py-3 px-1 rounded-2xl border-2 text-center transition flex flex-col items-center justify-center ${
+        bWeekend
+          ? 'border-slate-200 bg-slate-50 text-slate-400 opacity-60 cursor-not-allowed'
+          : 'border-slate-200 bg-white hover:border-pine-600 hover:bg-pine-50 text-slate-800 cursor-pointer'
+      }`;
+      const parts = b.dataset.date.split('-');
+      const dObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      const wds = ['日', '一', '二', '三', '四', '五', '六'];
+      b.innerHTML = `
+        <span class="text-xs font-bold ${bWeekend ? 'text-slate-400' : 'text-slate-500'}">週${wds[dObj.getDay()]}</span>
+        <span class="text-sm md:text-base font-extrabold my-0.5 ${bWeekend ? 'text-slate-400' : 'text-slate-900'}">${dObj.getMonth() + 1}/${dObj.getDate()}</span>
+        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${bWeekend ? 'text-rose-500 bg-rose-50' : 'text-emerald-700 bg-emerald-50'}">${bWeekend ? '休診' : '可約'}</span>
+      `;
+    }
+  });
+
+  // 更新選取日期文字（本地時間解析）
+  const parts = dateStr.split('-');
+  const dateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+  document.getElementById('selectedDateText').textContent = `${dateStr} (週${weekdays[dateObj.getDay()]})`;
+
+  const closedBadge = document.getElementById('closedBadge');
+  const weekendNotice = document.getElementById('weekendClosedNotice');
+  const slotsContainer = document.getElementById('slotsContainer');
+  const slotsLoading = document.getElementById('slotsLoading');
+
+  if (isWeekend) {
+    closedBadge.classList.remove('hidden');
+    weekendNotice.classList.remove('hidden');
+    slotsContainer.classList.add('hidden');
+    slotsLoading.classList.add('hidden');
+    setTimeout(() => {
+      const anchor = document.getElementById('slotSectionAnchor');
+      if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  } else {
+    closedBadge.classList.add('hidden');
+    weekendNotice.classList.add('hidden');
+    fetchSlots(dateStr);
+    setTimeout(() => {
+      const anchor = document.getElementById('slotSectionAnchor');
+      if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  }
+}
+
+// --- 載入時段（即時從後端取得已被預約的時段並鎖定） ---
+async function fetchSlots(dateStr) {
+  const loading = document.getElementById('slotsLoading');
+  const container = document.getElementById('slotsContainer');
+  const weekendNotice = document.getElementById('weekendClosedNotice');
+
+  // 先清空並顯示載入中
+  loading.classList.remove('hidden');
+  weekendNotice.classList.add('hidden');
+  container.classList.add('hidden');
+
+  try {
+    const tId = bookingData.therapistId || 'any';
+    const res = await fetch('/api/slots?date=' + dateStr + '&therapist_id=' + encodeURIComponent(tId));
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    loading.classList.add('hidden');
+
+    if (data.is_closed) {
+      weekendNotice.classList.remove('hidden');
+      return;
+    }
+
+    container.classList.remove('hidden');
+    renderSlotButtons(data.slots);
+  } catch (err) {
+    // 若後端發生異常或未連線，降級使用預設 8 個時段
+    loading.classList.add('hidden');
+    container.classList.remove('hidden');
+    const fallbackSlots = FIXED_SLOTS.map(t => ({ time: t, available: true }));
+    renderSlotButtons(fallbackSlots);
+  }
+}
+
+function renderSlotButtons(slots) {
+  const mBox = document.getElementById('morningSlots');
+  const aBox = document.getElementById('afternoonSlots');
+  const eBox = document.getElementById('eveningSlots');
+
+  mBox.innerHTML = '';
+  aBox.innerHTML = '';
+  eBox.innerHTML = '';
+
+  // 依要求：已經被預約的時段直接隱藏不出現，只保留有空檔可預約的時段
+  const availableSlots = slots.filter(s => s.available);
+
+  if (availableSlots.length === 0) {
+    const emptyNotice = document.createElement('div');
+    emptyNotice.className = 'col-span-3 py-6 text-center text-slate-400 text-xs';
+    emptyNotice.innerHTML = '此日期該治療師之預約時段已全數額滿，請選擇其他日期或另一位物理治療師。';
+    mBox.appendChild(emptyNotice);
+    return;
+  }
+
+  availableSlots.forEach(slot => {
+    const hour = parseInt(slot.time.split(':')[0], 10);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+
+    // Clean, stylish high-contrast slot buttons
+    btn.className = 'py-3.5 px-2 border-2 border-slate-800 bg-white hover:bg-pine-800 hover:text-white hover:border-pine-900 rounded-2xl text-center transition font-extrabold text-sm md:text-base text-slate-900 flex flex-col items-center justify-center shadow-xs cursor-pointer group';
+    btn.innerHTML = `
+      <span class="tracking-wider text-base md:text-lg">${slot.time}</span>
+      <span class="text-[10px] text-emerald-700 group-hover:text-pine-200 font-bold mt-0.5">有空檔</span>
+    `;
+    btn.onclick = () => selectSlot(slot.time, btn);
+
+    // Distribute into 3 rows
+    if (hour < 12) {
+      mBox.appendChild(btn);
+    } else if (hour < 18) {
+      aBox.appendChild(btn);
+    } else {
+      eBox.appendChild(btn);
+    }
+  });
+
+  // 檢查上午、下午、晚間若沒有任何時段，顯示無空檔小提示
+  [
+    { box: mBox, label: '上午' },
+    { box: aBox, label: '下午' },
+    { box: eBox, label: '晚間' }
+  ].forEach(group => {
+    if (group.box.children.length === 0) {
+      group.box.innerHTML = `<span class="col-span-3 text-center text-[11px] text-slate-400 py-2">${group.label}時段皆已約滿或無開放</span>`;
+    }
+  });
+}
+
+function selectSlot(timeStr, btnEl) {
+  bookingData.time = timeStr;
+  document.getElementById('chosenSlotText').textContent = `${bookingData.date} ${timeStr}`;
+  document.getElementById('slotSelectedAlert').classList.remove('hidden');
+  document.getElementById('btnToStep3').disabled = false;
+
+  // Highlight selected slot
+  document.querySelectorAll('#morningSlots button, #afternoonSlots button, #eveningSlots button').forEach(b => {
+    if (!b.disabled) {
+      b.className = 'py-3.5 px-2 border-2 border-slate-800 bg-white hover:bg-pine-800 hover:text-white hover:border-pine-900 rounded-2xl text-center transition font-extrabold text-sm md:text-base text-slate-900 flex flex-col items-center justify-center shadow-xs cursor-pointer group';
+      b.querySelector('span:last-child').className = 'text-[10px] text-emerald-700 group-hover:text-pine-200 font-bold mt-0.5';
+    }
+  });
+
+  btnEl.className = 'py-3.5 px-2 border-2 border-pine-950 bg-pine-800 text-white rounded-2xl text-center font-extrabold text-sm md:text-base flex flex-col items-center justify-center shadow-md';
+  btnEl.querySelector('span:last-child').className = 'text-[10px] text-pine-200 font-bold mt-0.5';
+  lucide.createIcons();
+}
+
+// --- Submit Booking ---
+async function submitBooking() {
+  const agree = document.getElementById('checkAgree').checked;
+  if (!agree) {
+    alert('請勾選同意青松物理治療所預約與看診規範');
+    return;
+  }
+
+  const btn = document.getElementById('btnSubmitBooking');
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>預約處理中...</span>';
+  lucide.createIcons();
+
+  const payload = {
+    line_user_id: currentLineUser.userId,
+    patient_name: bookingData.name,
+    patient_phone: bookingData.phone,
+    patient_birthday: bookingData.birthday,
+    therapist_id: bookingData.therapistId || 'any',
+    visit_type: bookingData.visitType,
+    has_referral_slip: bookingData.hasReferral,
+    appointment_date: bookingData.date,
+    appointment_time: bookingData.time,
+    patient_note: bookingData.note
+  };
+
+  try {
+    const res = await fetch('/api/appointments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const result = await res.json();
+
+    if (!res.ok || result.error) {
+      alert(result.error || '預約失敗，請重試');
+      btn.disabled = false;
+      btn.innerHTML = '<span>確認送出預約</span>';
+      return;
+    }
+
+    // Success View
+    document.getElementById('bookingStep4').classList.add('hidden');
+    document.getElementById('bookingSuccessView').classList.remove('hidden');
+
+    document.getElementById('successAptId').textContent = result.appointment_id;
+    document.getElementById('successDate').textContent = result.appointment_date;
+    document.getElementById('successTime').textContent = result.appointment_time;
+    const stEl = document.getElementById('successTherapist');
+    if (stEl) stEl.textContent = (result.therapist_name ? result.therapist_name + ' 物理治療師' : '診所安排');
+
+    loadMyAppointments();
+    checkPatientMemory();
+  } catch (err) {
+    alert('網路連線失敗，請檢查網路連線');
+    btn.disabled = false;
+    btn.innerHTML = '<span>確認送出預約</span>';
+  }
+}
+
+function resetBookingForm() {
+  document.getElementById('bookingSuccessView').classList.add('hidden');
+  goToStep(1);
+}
+
+// --- Load My Appointments ---
+async function loadMyAppointments() {
+  const container = document.getElementById('myAppointmentsList');
+  if (!container) return;
+
+  try {
+    const res = await fetch(`/api/appointments?line_user_id=${encodeURIComponent(currentLineUser.userId)}`);
+    const list = await res.json();
+
+    if (!list || list.length === 0) {
+      container.innerHTML = `
+        <div class="py-12 text-center text-slate-400 space-y-2">
+          <i data-lucide="calendar-x" class="w-8 h-8 mx-auto text-slate-300"></i>
+          <p class="text-xs md:text-sm">尚無預約掛號紀錄</p>
+          <button onclick="switchTab('booking')" class="text-xs text-pine-700 font-bold hover:underline">立即線上掛號</button>
+        </div>
+      `;
+      lucide.createIcons();
+      return;
+    }
+
+    const activeCount = list.filter(a => a.status !== 'CANCELLED' && a.status !== 'COMPLETED').length;
+    ['navBookingBadge', 'dnavBookingBadge'].forEach(id => {
+      const b = document.getElementById(id);
+      if (b) {
+        if (activeCount > 0) b.classList.remove('hidden');
+        else b.classList.add('hidden');
+      }
+    });
+
+    container.innerHTML = '';
+    list.forEach(apt => {
+      const card = document.createElement('div');
+      card.className = 'p-4 rounded-2xl border border-slate-200 bg-white shadow-xs space-y-3';
+
+      let statusBadge = '';
+      if (apt.status === 'CONFIRMED') {
+        statusBadge = '<span class="text-xs bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>已確認出席</span>';
+      } else if (apt.status === 'PENDING_CONFIRM') {
+        statusBadge = '<span class="text-xs bg-amber-100 text-amber-800 font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>24H待確認</span>';
+      } else if (apt.status === 'CANCELLED') {
+        statusBadge = '<span class="text-xs bg-rose-100 text-rose-700 font-medium px-2.5 py-0.5 rounded-full">已取消</span>';
+      } else {
+        statusBadge = '<span class="text-xs bg-slate-100 text-slate-700 font-medium px-2.5 py-0.5 rounded-full">預約成功 (待通知)</span>';
+      }
+
+      let typeName = '初診評估';
+      if (apt.visit_type === 'FOLLOW_UP') typeName = '複診追蹤';
+      if (apt.visit_type === 'FITNESS') typeName = '肌力訓練';
+
+      // 顯示治療師姓名（若後台已分配）
+      const therapistDisplay = apt.therapist_name
+        ? `<div class="flex justify-between"><span>負責治療師：</span><span class="font-bold text-pine-800">${apt.therapist_name} 物理治療師</span></div>`
+        : `<div class="flex justify-between"><span>負責治療師：</span><span class="text-slate-400">由診所安排</span></div>`;
+
+      card.innerHTML = `
+        <div class="flex items-center justify-between border-b pb-2.5">
+          <div class="flex items-center gap-2 font-bold text-slate-900 text-sm">
+            <i data-lucide="calendar" class="w-4 h-4 text-pine-700"></i>
+            <span>${apt.appointment_date} (${apt.appointment_time})</span>
+          </div>
+          ${statusBadge}
+        </div>
+        <div class="text-xs space-y-1.5 text-slate-600">
+          <div class="flex justify-between"><span>就診院所：</span><span class="font-bold text-slate-800">青松物理治療所</span></div>
+          <div class="flex justify-between"><span>就診類別：</span><span>${typeName}</span></div>
+          ${therapistDisplay}
+          <div class="flex justify-between"><span>預約病患：</span><span>${apt.patient_name} (${apt.patient_phone})</span></div>
+        </div>
+        ${apt.status !== 'CANCELLED' ? `
+          <div class="pt-2 border-t flex space-x-2">
+            ${apt.status === 'PENDING_CONFIRM' ? `
+              <button onclick="confirmAppointment('${apt.id}')" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1">
+                <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                <span>確認明日準時前往</span>
+              </button>
+            ` : ''}
+            <button onclick="cancelAppointment('${apt.id}')" class="flex-1 py-2 border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1">
+              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+              <span>取消預約 (釋出時段)</span>
+            </button>
+          </div>
+        ` : `
+          <div class="text-[11px] text-slate-400 italic">已於 ${apt.cancelled_at || '線上'} 取消</div>
+        `}
+      `;
+      container.appendChild(card);
+    });
+    lucide.createIcons();
+  } catch (err) {
+    container.innerHTML = '<div class="py-8 text-center text-rose-500 text-xs">載入紀錄失敗</div>';
+  }
+}
+
+async function confirmAppointment(aptId) {
+  try {
+    const res = await fetch(`/api/appointments/${aptId}/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    const data = await res.json();
+    alert(data.message || '已確認明天出席！');
+    loadMyAppointments();
+  } catch (err) {
+    alert('操作失敗，請再試一次');
+  }
+}
+
+async function cancelAppointment(aptId) {
+  if (!confirm('確定要取消此筆物理治療預約嗎？\n取消後該時段將立即釋出給其他病友。')) {
+    return;
+  }
+  try {
+    const res = await fetch(`/api/appointments/${aptId}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: '病患於 LINE LIFF 自行取消' })
+    });
+    const data = await res.json();
+    alert(data.message || '預約已取消');
+    loadMyAppointments();
+  } catch (err) {
+    alert('取消失敗，請再試一次');
+  }
+}
+
+</script>
 </body>
 </html>
