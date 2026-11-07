@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "framework": null,
+  "crons": [
+    {
+      "path": "/api/reminders/check-and-send",
+      "schedule": "0 * * * *"
+    }
+  ]
+}
