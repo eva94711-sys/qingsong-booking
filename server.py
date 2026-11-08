@@ -4,6 +4,7 @@ import socketserver
 import os
 import json
 import urllib.parse
+import urllib.request
 import sqlite3
 import uuid
 import csv
@@ -14,6 +15,7 @@ import database
 PORT = 8080
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PUBLIC_DIR = os.path.join(BASE_DIR, "public")
+DEFAULT_LINE_TOKEN = "yp6wkNJuQGfj9VJJwTWxAsZF9+uzK96hfuioq5jxJ8k0uSBhBGsrN8iiNOujlptTeWBbBe0xqDhmVXYbwTVDeo0NFFqQMe23nIvMMMg+UHc7khN6AchbB43a1rsaqTzQEi4S19/7ZGismZ/suDGUrwdB04t89/1O/w1cDnyilFU="
 
 class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -400,6 +402,10 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             # Generate Flex Message payload
             flex_receipt = self.generate_flex_receipt(apt_id, patient_name, assigned_therapist_name, appointment_date, appointment_time, visit_type, has_referral_slip)
 
+            # Push instant receipt to patient's LINE chat
+            if line_user_id and not line_user_id.startswith("U_GUEST_"):
+                self.send_line_push_flex(line_user_id, "【青松物理治療所】預約掛號成功憑證", flex_receipt)
+
             self.send_json({
                 "success": True,
                 "appointment_id": apt_id,
@@ -604,6 +610,66 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(csv_bytes)
 
+    def get_line_token(self):
+        return os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", DEFAULT_LINE_TOKEN)
+
+    def send_line_push_flex(self, to_user_id, alt_text, flex_content):
+        token = self.get_line_token()
+        if not token or not to_user_id or to_user_id.startswith("U_GUEST_"):
+            return False
+        try:
+            url = "https://api.line.me/v2/bot/message/push"
+            payload = json.dumps({
+                "to": to_user_id,
+                "messages": [{
+                    "type": "flex",
+                    "altText": alt_text,
+                    "contents": flex_content
+                }]
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                url,
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {token}"
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return resp.status == 200
+        except Exception as e:
+            print(f"Failed to send LINE push: {e}")
+            return False
+
+    def send_line_reply_text(self, reply_token, text):
+        token = self.get_line_token()
+        if not token or not reply_token:
+            return False
+        try:
+            url = "https://api.line.me/v2/bot/message/reply"
+            payload = json.dumps({
+                "replyToken": reply_token,
+                "messages": [{
+                    "type": "text",
+                    "text": text
+                }]
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                url,
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {token}"
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return resp.status == 200
+        except Exception as e:
+            print(f"Failed to reply LINE: {e}")
+            return False
+
     def api_trigger_reminders(self, body):
         """Dynamic 24h Reminder check: finds appointments happening in next 24-28 hours that are RESERVED"""
         conn = database.get_connection()
@@ -637,12 +703,17 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
                 VALUES (?, ?, ?, ?, 'SENT', ?)
             """, (str(uuid.uuid4()), apt["id"], apt["line_user_id"], now_str, json.dumps(flex_card, ensure_ascii=False)))
 
+            push_sent = False
+            if apt["line_user_id"] and not apt["line_user_id"].startswith("U_GUEST_"):
+                push_sent = self.send_line_push_flex(apt["line_user_id"], "【青松物理治療所】明日看診出席確認通知", flex_card)
+
             processed.append({
                 "appointment_id": apt["id"],
                 "patient_name": apt["patient_name"],
                 "therapist_name": apt["therapist_name"],
                 "date": apt["appointment_date"],
                 "time": apt["appointment_time"],
+                "push_sent": push_sent,
                 "flex_preview": flex_card
             })
 
@@ -666,6 +737,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         for event in events:
             if event.get("type") == "postback":
+                reply_token = event.get("replyToken")
                 postback_data = event.get("postback", {}).get("data", "")
                 parsed_data = urllib.parse.parse_qs(postback_data)
                 action = parsed_data.get("action", [""])[0]
@@ -675,9 +747,13 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if action == "confirm" and apt_id:
                     cursor.execute("UPDATE appointments SET status = 'CONFIRMED', confirmed_at = ? WHERE id = ?", (now_str, apt_id))
                     results.append({"apt_id": apt_id, "action": "confirmed"})
+                    if reply_token:
+                        self.send_line_reply_text(reply_token, "✅ 已為您確認明日預約！\n\n院長與物理治療師將專屬為您保留時段。\n📍 看診地點：高雄市鳥松區華美路69號\n請穿著寬鬆活動衣褲，提早 5-10 分鐘抵達報到，期待為您服務！🌲")
                 elif action == "cancel" and apt_id:
                     cursor.execute("UPDATE appointments SET status = 'CANCELLED', cancelled_at = ?, cancel_reason = 'LINE確認卡片點擊無法前往' WHERE id = ?", (now_str, apt_id))
                     results.append({"apt_id": apt_id, "action": "cancelled"})
+                    if reply_token:
+                        self.send_line_reply_text(reply_token, "❌ 已為您取消明日預約，該時段已釋出。\n\n若日後需要重新安排看診或肌力訓練，隨時歡迎點擊下方選單再次預約，祝您早日康復、健康平安！🌲")
 
         conn.commit()
         conn.close()
