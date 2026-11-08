@@ -117,7 +117,7 @@ def seed_data(cursor):
     """, (
         "th_liu",
         "劉韋綸",
-        "院長／所長",
+        "院長",
         "Physical Therapist",
         "/images/therapist_liu.svg",
         1,
