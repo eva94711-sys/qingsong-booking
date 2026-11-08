@@ -266,7 +266,7 @@
                   <input type="radio" name="therapistOption" value="th_liu" checked class="text-pine-700 focus:ring-pine-500" onchange="onTherapistChange('th_liu', '劉韋綸 院長')">
                   <div class="text-left sm:text-center">
                     <span class="font-bold text-slate-900 text-sm md:text-base block">劉韋綸</span>
-                    <span class="text-xs text-slate-500 block">院長／所長</span>
+                    <span class="text-xs text-slate-500 block">院長</span>
                   </div>
                 </div>
                 <span class="text-[11px] bg-pine-100 text-pine-800 font-bold px-2.5 py-0.5 rounded-full mt-1.5">徒手／動作控制</span>
@@ -445,11 +445,8 @@
                 <input type="hidden" id="inputBirthday" value="">
               </div>
 
-              <!-- 備註說明 -->
-              <div class="md:col-span-2">
-                <label class="block font-bold text-slate-700 mb-1.5">主要不適狀況／備註 (選填)</label>
-                <textarea id="inputNote" rows="2" placeholder="例如：右肩疼痛兩個月、打羽球拉傷腰部..." class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pine-600"></textarea>
-              </div>
+              <!-- 備註欄已移除 -->
+              <input type="hidden" id="inputNote" value="">
             </div>
           </div>
 
@@ -674,7 +671,7 @@
                 <div>
                   <div class="flex items-center space-x-2">
                     <h3 class="text-base font-bold text-slate-900">劉韋綸</h3>
-                    <span class="text-xs bg-pine-700 text-white px-2 py-0.5 rounded-full font-bold">院長／所長</span>
+                    <span class="text-xs bg-pine-700 text-white px-2 py-0.5 rounded-full font-bold">院長</span>
                   </div>
                   <p class="text-xs text-pine-800 font-medium mt-0.5">Physical Therapist</p>
                 </div>
@@ -1062,9 +1059,9 @@ function switchTestUser(uid, name, phone, birthday) {
   toggleUserSimulator();
 
   if (name && phone) {
-    document.getElementById('inputName').value = name;
-    document.getElementById('inputPhone').value = phone;
-    if (birthday) setBirthdayFromISO(birthday);
+    // 測試模擬器切換用戶時才帶入，正式病患保持空白
+    document.getElementById('inputName').value = '';
+    document.getElementById('inputPhone').value = '';
   }
   loadMyAppointments();
   checkPatientMemory();
