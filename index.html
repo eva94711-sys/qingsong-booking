@@ -266,7 +266,7 @@
                   <input type="radio" name="therapistOption" value="th_liu" checked class="text-pine-700 focus:ring-pine-500" onchange="onTherapistChange('th_liu', '劉韋綸 院長')">
                   <div class="text-left sm:text-center">
                     <span class="font-bold text-slate-900 text-sm md:text-base block">劉韋綸</span>
-                    <span class="text-xs text-slate-500 block">院長／所長</span>
+                    <span class="text-xs text-slate-500 block">院長</span>
                   </div>
                 </div>
                 <span class="text-[11px] bg-pine-100 text-pine-800 font-bold px-2.5 py-0.5 rounded-full mt-1.5">徒手／動作控制</span>
@@ -349,24 +349,27 @@
             <div id="slotsContainer" class="hidden space-y-4">
               <!-- Row 1: 上午時段 -->
               <div>
-                <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                  <i data-lucide="sun" class="w-3.5 h-3.5 text-amber-500"></i> 上午時段
+                <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center justify-between">
+                  <span class="flex items-center gap-1"><i data-lucide="sun" class="w-3.5 h-3.5 text-amber-500"></i> 上午時段</span>
+                  <span class="text-[11px] text-slate-400 font-normal">AM 09:00 - AM 12:00</span>
                 </div>
                 <div class="grid grid-cols-3 gap-2.5 sm:gap-3" id="morningSlots"></div>
               </div>
 
               <!-- Row 2: 下午時段 -->
               <div>
-                <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                  <i data-lucide="sun-medium" class="w-3.5 h-3.5 text-amber-600"></i> 下午時段
+                <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center justify-between">
+                  <span class="flex items-center gap-1"><i data-lucide="sun-medium" class="w-3.5 h-3.5 text-amber-600"></i> 下午時段</span>
+                  <span class="text-[11px] text-slate-400 font-normal">PM 03:00 - PM 06:00</span>
                 </div>
                 <div class="grid grid-cols-3 gap-2.5 sm:gap-3" id="afternoonSlots"></div>
               </div>
 
               <!-- Row 3: 晚間時段 -->
               <div>
-                <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                  <i data-lucide="moon" class="w-3.5 h-3.5 text-indigo-500"></i> 晚間時段
+                <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center justify-between">
+                  <span class="flex items-center gap-1"><i data-lucide="moon" class="w-3.5 h-3.5 text-indigo-500"></i> 晚間時段</span>
+                  <span class="text-[11px] text-slate-400 font-normal">PM 07:00 - PM 09:00</span>
                 </div>
                 <div class="grid grid-cols-3 gap-2.5 sm:gap-3" id="eveningSlots"></div>
               </div>
@@ -397,39 +400,53 @@
         <!-- STEP 3: 病患基本資料 -->
         <div id="bookingStep3" class="hidden space-y-4 max-w-2xl mx-auto">
           <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <div class="flex items-center justify-between border-b pb-3">
+            <div class="flex items-center border-b pb-3">
               <label class="block text-sm md:text-base font-bold text-slate-900 flex items-center gap-2">
                 <i data-lucide="user" class="w-5 h-5 text-pine-700"></i> 病患聯絡資料
               </label>
-              <button id="btnAutofill" onclick="autoFillPatientData()" class="hidden text-xs text-pine-700 font-bold bg-pine-50 hover:bg-pine-100 border border-pine-200 px-2.5 py-1 rounded-xl transition flex items-center gap-1">
-                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-pine-700"></i> 帶入上次資料
-              </button>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               <!-- 姓名 -->
               <div>
                 <label class="block font-bold text-slate-700 mb-1.5">病患姓名 <span class="text-rose-500">*</span></label>
-                <input type="text" id="inputName" placeholder="請填寫真實姓名" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pine-600">
+                <input type="text" id="inputName" placeholder="請填寫真實姓名" value="" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pine-600">
               </div>
 
               <!-- 手機號碼 -->
               <div>
-                <label class="block font-bold text-slate-700 mb-1.5">手機號碼 <span class="text-rose-500">*</span> (接收LINE/簡訊提醒)</label>
-                <input type="tel" id="inputPhone" placeholder="0912-345-678" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pine-600">
+                <label class="block font-bold text-slate-700 mb-1.5">手機號碼 <span class="text-rose-500">*</span> (接收LINE提醒)</label>
+                <input type="tel" id="inputPhone" inputmode="tel" placeholder="請輸入手機號碼 (09xxxxxxxx)" value="" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pine-600">
               </div>
 
-              <!-- 出生年月日 -->
+              <!-- 出生年月日 (卷軸選擇) -->
               <div class="md:col-span-2">
-                <label class="block font-bold text-slate-700 mb-1.5">出生年月日 <span class="text-rose-500">*</span></label>
-                <input type="date" id="inputBirthday" value="1990-01-01" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pine-600">
+                <label class="block font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>出生年月日 <span class="text-rose-500">*</span></span>
+                  <span class="text-[11px] font-normal text-slate-400">點擊滑動卷軸選取 年／月／日</span>
+                </label>
+                <div class="grid grid-cols-12 gap-2">
+                  <div class="col-span-5">
+                    <select id="birthYear" onchange="onBirthdayChange()" class="w-full px-2.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-pine-600 text-slate-800">
+                      <option value="">選擇出生年</option>
+                    </select>
+                  </div>
+                  <div class="col-span-3">
+                    <select id="birthMonth" onchange="onBirthdayChange()" class="w-full px-2 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-pine-600 text-slate-800">
+                      <option value="">月份</option>
+                    </select>
+                  </div>
+                  <div class="col-span-4">
+                    <select id="birthDay" onchange="onBirthdayChange()" class="w-full px-2 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-pine-600 text-slate-800">
+                      <option value="">日期</option>
+                    </select>
+                  </div>
+                </div>
+                <input type="hidden" id="inputBirthday" value="">
               </div>
 
-              <!-- 備註說明 -->
-              <div class="md:col-span-2">
-                <label class="block font-bold text-slate-700 mb-1.5">主要不適狀況／備註 (選填)</label>
-                <textarea id="inputNote" rows="2" placeholder="例如：右肩疼痛兩個月、打羽球拉傷腰部..." class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pine-600"></textarea>
-              </div>
+              <!-- 備註欄已移除 -->
+              <input type="hidden" id="inputNote" value="">
             </div>
           </div>
 
@@ -460,6 +477,7 @@
               <div class="flex justify-between"><span class="text-slate-500">照會轉診單狀態：</span><span id="confirmReferral" class="font-bold text-slate-800"></span></div>
               <div class="border-t border-slate-200 my-2 pt-2 flex justify-between"><span class="text-slate-500">病患姓名：</span><span id="confirmName" class="font-bold text-slate-800"></span></div>
               <div class="flex justify-between"><span class="text-slate-500">聯絡電話：</span><span id="confirmPhone" class="font-bold text-slate-800"></span></div>
+              <div class="flex justify-between"><span class="text-slate-500">出生年月日：</span><span id="confirmBirthday" class="font-bold text-slate-800"></span></div>
             </div>
 
             <!-- 看診提醒 -->
@@ -653,7 +671,7 @@
                 <div>
                   <div class="flex items-center space-x-2">
                     <h3 class="text-base font-bold text-slate-900">劉韋綸</h3>
-                    <span class="text-xs bg-pine-700 text-white px-2 py-0.5 rounded-full font-bold">院長／所長</span>
+                    <span class="text-xs bg-pine-700 text-white px-2 py-0.5 rounded-full font-bold">院長</span>
                   </div>
                   <p class="text-xs text-pine-800 font-medium mt-0.5">Physical Therapist</p>
                 </div>
@@ -813,7 +831,7 @@
               <div class="flex items-start space-x-3">
                 <i data-lucide="map-pin" class="w-4 h-4 text-pine-700 mt-1 flex-shrink-0"></i>
                 <div>
-                  <span class="font-bold text-slate-800">院址：</span>
+                  <span class="font-bold text-slate-800">門市地址：</span>
                   <p class="text-slate-600 mt-0.5">高雄市鳥松區華美路69號</p>
                   <a href="https://maps.google.com/?q=青松物理治療所" target="_blank" class="text-pine-700 font-bold hover:underline inline-flex items-center gap-1 mt-1 text-xs">
                     Google 地圖導航 <i data-lucide="external-link" class="w-3 h-3"></i>
@@ -824,8 +842,8 @@
               <div class="flex items-start space-x-3">
                 <i data-lucide="phone" class="w-4 h-4 text-pine-700 mt-1 flex-shrink-0"></i>
                 <div>
-                  <span class="font-bold text-slate-800">聯絡電話：</span>
-                  <p class="text-slate-600 mt-0.5">07-7353353</p>
+                  <span class="font-bold text-slate-800">聯繫方式：</span>
+                  <p class="text-slate-600 mt-0.5">07-735-3353</p>
                   <a href="tel:077353353" class="text-pine-700 font-bold hover:underline inline-flex items-center gap-1 mt-1 text-xs">
                     一鍵撥號 <i data-lucide="phone-call" class="w-3 h-3"></i>
                   </a>
@@ -836,7 +854,7 @@
                 <i data-lucide="message-circle" class="w-4 h-4 text-emerald-600 mt-1 flex-shrink-0"></i>
                 <div>
                   <span class="font-bold text-slate-800">官方 LINE：</span>
-                  <p class="text-slate-600 mt-0.5">@126cxeyj</p>
+                  <p class="text-slate-600 mt-0.5">@557fabgw</p>
                 </div>
               </div>
             </div>
@@ -847,10 +865,10 @@
                 <i data-lucide="clock" class="w-4 h-4 text-pine-700"></i> 門診營業時間
               </span>
               <div class="text-xs text-slate-600 space-y-1 pl-1">
-                <p><strong>週一至週五看診時段：</strong></p>
-                <p>• 上午：09:00, 10:00, 11:00</p>
-                <p>• 下午：15:00, 16:00, 17:00</p>
-                <p>• 晚間：19:00, 20:00</p>
+                <p><strong>週一至週五營業時間：</strong></p>
+                <p>• 上午時段：AM 09:00 - AM 12:00</p>
+                <p>• 下午時段：PM 03:00 - PM 06:00</p>
+                <p>• 晚間時段：PM 07:00 - PM 09:00</p>
                 <div class="pt-2 border-t border-slate-200 text-rose-600 font-bold flex items-center gap-1">
                   <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
                   <span>週六、週日：固定休診</span>
@@ -955,8 +973,8 @@
 let currentTab = 'booking';
 let currentStep = 1;
 let currentLineUser = {
-  userId: 'U_DEMO_001',
-  displayName: '陳雅婷',
+  userId: '',
+  displayName: '',
   pictureUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=qingsong'
 };
 
@@ -969,7 +987,7 @@ let bookingData = {
   time: '',
   name: '',
   phone: '',
-  birthday: '1990-01-01',
+  birthday: '',
   note: ''
 };
 
@@ -982,6 +1000,7 @@ let bookedSlots = [];
 // Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', async () => {
   lucide.createIcons();
+  populateBirthdaySelectors();
   await initLiff();
   initStep1();         // 初始化第一步（預設未選擇）
   generateDateList();
@@ -1004,22 +1023,27 @@ async function initLiff() {
         }
         updateUserUI();
       } else {
-        const savedUser = localStorage.getItem('qingsong_test_user');
-        if (savedUser) {
-          currentLineUser = JSON.parse(savedUser);
-        }
+        // 非 LINE 內開啟：清除任何舊的測試用戶 localStorage，使用空白訪客
+        localStorage.removeItem('qingsong_test_user');
+        currentLineUser.userId = 'U_GUEST_' + Math.random().toString(36).slice(2, 10);
+        currentLineUser.displayName = '';
         updateUserUI();
       }
     }
   } catch (err) {
     console.warn('LIFF init fallback:', err);
+    currentLineUser.userId = 'U_GUEST_' + Math.random().toString(36).slice(2, 10);
+    currentLineUser.displayName = '';
     updateUserUI();
   }
 }
 
 function updateUserUI() {
-  document.getElementById('userName').textContent = currentLineUser.displayName || 'LINE 用戶';
-  document.getElementById('userAvatar').src = currentLineUser.pictureUrl;
+  const name = currentLineUser.displayName;
+  const nameEl = document.getElementById('userName');
+  if (nameEl) nameEl.textContent = name || '';
+  const avatarEl = document.getElementById('userAvatar');
+  if (avatarEl && currentLineUser.pictureUrl) avatarEl.src = currentLineUser.pictureUrl;
   const uidDisplay = document.getElementById('currentUidDisplay');
   if (uidDisplay) uidDisplay.textContent = currentLineUser.userId;
 }
@@ -1040,12 +1064,104 @@ function switchTestUser(uid, name, phone, birthday) {
   toggleUserSimulator();
 
   if (name && phone) {
-    document.getElementById('inputName').value = name;
-    document.getElementById('inputPhone').value = phone;
-    if (birthday) document.getElementById('inputBirthday').value = birthday;
+    // 測試模擬器切換用戶時才帶入，正式病患保持空白
+    document.getElementById('inputName').value = '';
+    document.getElementById('inputPhone').value = '';
   }
   loadMyAppointments();
   checkPatientMemory();
+}
+
+// --- 出生年月日 滾輪卷軸選擇器 (年、月、日) ---
+function populateBirthdaySelectors() {
+  const yearSelect = document.getElementById('birthYear');
+  const monthSelect = document.getElementById('birthMonth');
+  const daySelect = document.getElementById('birthDay');
+  if (!yearSelect || !monthSelect || !daySelect) return;
+
+  yearSelect.innerHTML = '<option value="">選擇出生年</option>';
+  monthSelect.innerHTML = '<option value="">選擇月</option>';
+  daySelect.innerHTML = '<option value="">選擇日</option>';
+
+  const currentYear = new Date().getFullYear();
+  for (let y = currentYear; y >= 1920; y--) {
+    const opt = document.createElement('option');
+    opt.value = y;
+    const minguo = y - 1911;
+    const minguoText = minguo > 0 ? `民國${minguo}年` : `民國前${Math.abs(minguo - 1)}年`;
+    opt.textContent = `${y} 年 (${minguoText})`;
+    yearSelect.appendChild(opt);
+  }
+
+  for (let m = 1; m <= 12; m++) {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = `${m} 月`;
+    monthSelect.appendChild(opt);
+  }
+
+  updateBirthdayDays();
+}
+
+function updateBirthdayDays() {
+  const yearSelect = document.getElementById('birthYear');
+  const monthSelect = document.getElementById('birthMonth');
+  const daySelect = document.getElementById('birthDay');
+  if (!daySelect) return;
+
+  const currentVal = daySelect.value;
+  const y = parseInt(yearSelect.value, 10);
+  const m = parseInt(monthSelect.value, 10);
+  let maxDays = 31;
+  if (y && m) {
+    maxDays = new Date(y, m, 0).getDate();
+  }
+
+  daySelect.innerHTML = '<option value="">選擇日</option>';
+  for (let d = 1; d <= maxDays; d++) {
+    const opt = document.createElement('option');
+    opt.value = d;
+    opt.textContent = `${d} 日`;
+    if (parseInt(currentVal, 10) === d) {
+      opt.selected = true;
+    }
+    daySelect.appendChild(opt);
+  }
+}
+
+function onBirthdayChange() {
+  updateBirthdayDays();
+  const y = document.getElementById('birthYear').value;
+  const m = document.getElementById('birthMonth').value;
+  const d = document.getElementById('birthDay').value;
+  const hiddenInput = document.getElementById('inputBirthday');
+  if (y && m && d) {
+    const mm = String(m).padStart(2, '0');
+    const dd = String(d).padStart(2, '0');
+    hiddenInput.value = `${y}-${mm}-${dd}`;
+    bookingData.birthday = hiddenInput.value;
+  } else {
+    hiddenInput.value = '';
+    bookingData.birthday = '';
+  }
+}
+
+function setBirthdayFromISO(isoStr) {
+  if (!isoStr) return;
+  const parts = isoStr.split('-');
+  if (parts.length === 3) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    const d = parseInt(parts[2], 10);
+    const ySel = document.getElementById('birthYear');
+    const mSel = document.getElementById('birthMonth');
+    if (ySel) ySel.value = y;
+    if (mSel) mSel.value = m;
+    updateBirthdayDays();
+    const dSel = document.getElementById('birthDay');
+    if (dSel) dSel.value = d;
+    onBirthdayChange();
+  }
 }
 
 // --- Check Saved Patient Details (LINE UID Memory) ---
@@ -1055,30 +1171,14 @@ async function checkPatientMemory() {
     const data = await res.json();
     if (data.found && data.patient) {
       window.cachedPatientData = data.patient;
-      const btn = document.getElementById('btnAutofill');
-      if (btn) btn.classList.remove('hidden');
-      if (!document.getElementById('inputName').value) {
-        document.getElementById('inputName').value = data.patient.name || '';
-        document.getElementById('inputPhone').value = data.patient.phone || '';
-        if (data.patient.birthday) {
-          document.getElementById('inputBirthday').value = data.patient.birthday;
-        }
-      }
+      // 隱私保護：不自動帶入、不顯示「帶入上次資料」按鈕，資料僅後端記憶用
     }
   } catch (e) {
     console.error('Failed to load patient memory', e);
   }
 }
 
-function autoFillPatientData() {
-  if (window.cachedPatientData) {
-    document.getElementById('inputName').value = window.cachedPatientData.name || '';
-    document.getElementById('inputPhone').value = window.cachedPatientData.phone || '';
-    if (window.cachedPatientData.birthday) {
-      document.getElementById('inputBirthday').value = window.cachedPatientData.birthday;
-    }
-  }
-}
+// autoFillPatientData 功能已停用（隱私保護）
 
 // --- Tab Switching (Responsive Desktop & Mobile) ---
 function switchTab(tabId) {
@@ -1304,8 +1404,10 @@ function goToStep(step) {
   } else if (step === 4) {
     bookingData.name = document.getElementById('inputName').value.trim();
     bookingData.phone = document.getElementById('inputPhone').value.trim();
-    bookingData.birthday = document.getElementById('inputBirthday').value;
-    bookingData.note = document.getElementById('inputNote').value.trim();
+
+    const bYear = document.getElementById('birthYear').value;
+    const bMonth = document.getElementById('birthMonth').value;
+    const bDay = document.getElementById('birthDay').value;
 
     if (!bookingData.name) {
       alert('請填寫病患姓名');
@@ -1317,6 +1419,18 @@ function goToStep(step) {
       document.getElementById('inputPhone').focus();
       return;
     }
+    if (!bYear || !bMonth || !bDay) {
+      alert('請滑動卷軸選取完整的出生年月日（年、月、日）');
+      document.getElementById('birthYear').focus();
+      return;
+    }
+
+    const mm = String(bMonth).padStart(2, '0');
+    const dd = String(bDay).padStart(2, '0');
+    bookingData.birthday = `${bYear}-${mm}-${dd}`;
+    document.getElementById('inputBirthday').value = bookingData.birthday;
+
+    bookingData.note = document.getElementById('inputNote').value.trim();
 
     // Populate confirmation step
     document.getElementById('confirmDate').textContent = bookingData.date;
@@ -1338,6 +1452,12 @@ function goToStep(step) {
 
     document.getElementById('confirmName').textContent = bookingData.name;
     document.getElementById('confirmPhone').textContent = bookingData.phone;
+    const cfBirthday = document.getElementById('confirmBirthday');
+    if (cfBirthday) {
+      const mYear = parseInt(bYear, 10) - 1911;
+      const mText = mYear > 0 ? `民國${mYear}年` : '';
+      cfBirthday.textContent = `${bookingData.birthday} ${mText ? `(${mText})` : ''}`;
+    }
   }
 
   currentStep = step;
