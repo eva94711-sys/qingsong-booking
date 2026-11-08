@@ -49,6 +49,8 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.api_admin_get_stats()
         elif path == "/api/admin/export":
             self.api_admin_export_csv(query)
+        elif path == "/api/reminders/check-and-send":
+            self.api_trigger_reminders({})
         else:
             # Fallback to static file serving
             super().do_GET()
@@ -671,24 +673,27 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             return False
 
     def api_trigger_reminders(self, body):
-        """Dynamic 24h Reminder check: finds appointments happening in next 24-28 hours that are RESERVED"""
+        """Dynamic 24h Reminder check: finds upcoming appointments in the next 36 hours that are still RESERVED"""
         conn = database.get_connection()
         cursor = conn.cursor()
-        now = datetime.now()
-        # Find appointments between 20h and 28h from now
-        window_start = (now + timedelta(hours=20)).strftime("%Y-%m-%d %H:%M")
-        window_end = (now + timedelta(hours=28)).strftime("%Y-%m-%d %H:%M")
+        
+        # Calculate Taiwan Time (UTC+8)
+        taiwan_now = datetime.utcnow() + timedelta(hours=8)
+        
+        # Look from now up to 36 hours ahead (covers all upcoming appointments within 36 hours)
+        window_start = (taiwan_now - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M")
+        window_end = (taiwan_now + timedelta(hours=36)).strftime("%Y-%m-%d %H:%M")
 
         cursor.execute("""
             SELECT * FROM appointments 
-            WHERE status = 'RESERVED' 
+            WHERE (status = 'RESERVED' OR status = 'PENDING_CONFIRM')
               AND (appointment_date || ' ' || appointment_time) >= ?
               AND (appointment_date || ' ' || appointment_time) <= ?
         """, (window_start, window_end))
 
         eligible = cursor.fetchall()
         processed = []
-        now_str = now.strftime("%Y-%m-%d %H:%M:%S")
+        now_str = taiwan_now.strftime("%Y-%m-%d %H:%M:%S")
 
         for apt in eligible:
             flex_card = self.generate_flex_confirmation(apt)
