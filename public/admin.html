@@ -195,15 +195,15 @@
         <div class="flex items-start justify-between">
           <div>
             <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <i data-lucide="bell" class="w-4 h-4 text-pine-700"></i> 24 小時前看診出席自動確認機制
+              <i data-lucide="bell" class="w-4 h-4 text-pine-700"></i> 前一天下午 17:00 看診出席自動確認機制
             </h2>
             <p class="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
-              系統將動態根據每位病患的看診時間回推 24 小時，自動發送 LINE Flex 互動卡片詢問「明天是否會來？」。若病患點擊【無法前往】，系統即時將狀態改為已取消並釋出該時段；若就診前仍未回覆，狀態將呈現橘黃色「待確認」，供櫃檯主動關懷。
+              系統每日於看診前一天下午 17:00，自動發送 LINE Flex 互動卡片詢問「明天是否會來？」。若病患點擊【無法前往】，系統即時將狀態改為已取消並釋出該時段；若就診前仍未回覆，狀態將呈現橘黃色「待確認」，供櫃檯主動關懷。
             </p>
           </div>
           <button onclick="trigger24hReminders()" id="btnTriggerCron" class="inline-flex items-center gap-1.5 px-4 py-2 bg-pine-700 hover:bg-pine-800 text-white font-bold rounded-lg text-xs shadow-sm transition">
             <i data-lucide="play" class="w-4 h-4"></i>
-            <span>立即執行 24H 掃描與推播</span>
+            <span>立即掃描並發送明日提醒</span>
           </button>
         </div>
 
