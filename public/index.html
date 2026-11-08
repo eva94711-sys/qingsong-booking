@@ -397,13 +397,10 @@
         <!-- STEP 3: 病患基本資料 -->
         <div id="bookingStep3" class="hidden space-y-4 max-w-2xl mx-auto">
           <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <div class="flex items-center justify-between border-b pb-3">
+            <div class="flex items-center border-b pb-3">
               <label class="block text-sm md:text-base font-bold text-slate-900 flex items-center gap-2">
                 <i data-lucide="user" class="w-5 h-5 text-pine-700"></i> 病患聯絡資料
               </label>
-              <button id="btnAutofill" onclick="autoFillPatientData()" class="hidden text-xs text-pine-700 font-bold bg-pine-50 hover:bg-pine-100 border border-pine-200 px-2.5 py-1 rounded-xl transition flex items-center gap-1">
-                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-pine-700"></i> 帶入上次資料
-              </button>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -1166,24 +1163,14 @@ async function checkPatientMemory() {
     const data = await res.json();
     if (data.found && data.patient) {
       window.cachedPatientData = data.patient;
-      const btn = document.getElementById('btnAutofill');
-      if (btn) btn.classList.remove('hidden');
-      // 保持個人資料輸入框完全空白，讓病患自行填寫或自主點擊「帶入上次資料」
+      // 隱私保護：不自動帶入、不顯示「帶入上次資料」按鈕，資料僅後端記憶用
     }
   } catch (e) {
     console.error('Failed to load patient memory', e);
   }
 }
 
-function autoFillPatientData() {
-  if (window.cachedPatientData) {
-    document.getElementById('inputName').value = window.cachedPatientData.name || '';
-    document.getElementById('inputPhone').value = window.cachedPatientData.phone || '';
-    if (window.cachedPatientData.birthday) {
-      setBirthdayFromISO(window.cachedPatientData.birthday);
-    }
-  }
-}
+// autoFillPatientData 功能已停用（隱私保護）
 
 // --- Tab Switching (Responsive Desktop & Mobile) ---
 function switchTab(tabId) {
