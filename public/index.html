@@ -970,8 +970,8 @@
 let currentTab = 'booking';
 let currentStep = 1;
 let currentLineUser = {
-  userId: 'U_DEMO_001',
-  displayName: '陳雅婷',
+  userId: '',
+  displayName: '',
   pictureUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=qingsong'
 };
 
@@ -1020,22 +1020,27 @@ async function initLiff() {
         }
         updateUserUI();
       } else {
-        const savedUser = localStorage.getItem('qingsong_test_user');
-        if (savedUser) {
-          currentLineUser = JSON.parse(savedUser);
-        }
+        // 非 LINE 內開啟：清除任何舊的測試用戶 localStorage，使用空白訪客
+        localStorage.removeItem('qingsong_test_user');
+        currentLineUser.userId = 'U_GUEST_' + Math.random().toString(36).slice(2, 10);
+        currentLineUser.displayName = '';
         updateUserUI();
       }
     }
   } catch (err) {
     console.warn('LIFF init fallback:', err);
+    currentLineUser.userId = 'U_GUEST_' + Math.random().toString(36).slice(2, 10);
+    currentLineUser.displayName = '';
     updateUserUI();
   }
 }
 
 function updateUserUI() {
-  document.getElementById('userName').textContent = currentLineUser.displayName || 'LINE 用戶';
-  document.getElementById('userAvatar').src = currentLineUser.pictureUrl;
+  const name = currentLineUser.displayName;
+  const nameEl = document.getElementById('userName');
+  if (nameEl) nameEl.textContent = name || '';
+  const avatarEl = document.getElementById('userAvatar');
+  if (avatarEl && currentLineUser.pictureUrl) avatarEl.src = currentLineUser.pictureUrl;
   const uidDisplay = document.getElementById('currentUidDisplay');
   if (uidDisplay) uidDisplay.textContent = currentLineUser.userId;
 }
