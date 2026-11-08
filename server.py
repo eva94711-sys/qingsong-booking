@@ -673,23 +673,23 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             return False
 
     def api_trigger_reminders(self, body):
-        """Dynamic 24h Reminder check: finds upcoming appointments in the next 36 hours that are still RESERVED"""
+        """Finds tomorrow's appointments (or upcoming appointments in next 36h) that need reminder push"""
         conn = database.get_connection()
         cursor = conn.cursor()
         
         # Calculate Taiwan Time (UTC+8)
         taiwan_now = datetime.utcnow() + timedelta(hours=8)
-        
-        # Look from now up to 36 hours ahead (covers all upcoming appointments within 36 hours)
-        window_start = (taiwan_now - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M")
-        window_end = (taiwan_now + timedelta(hours=36)).strftime("%Y-%m-%d %H:%M")
+        tomorrow_date = (taiwan_now + timedelta(days=1)).strftime("%Y-%m-%d")
+        today_date = taiwan_now.strftime("%Y-%m-%d")
 
         cursor.execute("""
             SELECT * FROM appointments 
             WHERE (status = 'RESERVED' OR status = 'PENDING_CONFIRM')
-              AND (appointment_date || ' ' || appointment_time) >= ?
-              AND (appointment_date || ' ' || appointment_time) <= ?
-        """, (window_start, window_end))
+              AND (
+                appointment_date = ? 
+                OR (appointment_date = ? AND appointment_time >= ?)
+              )
+        """, (tomorrow_date, today_date, taiwan_now.strftime("%H:%M")))
 
         eligible = cursor.fetchall()
         processed = []
@@ -728,6 +728,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_json({
             "success": True,
             "checked_at": now_str,
+            "target_date": tomorrow_date,
             "processed_count": len(processed),
             "processed_items": processed
         })
@@ -799,7 +800,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
                         ]
                     },
                     {"type": "separator", "margin": "md"},
-                    {"type": "text", "text": "🔔 我們將於看診前 24 小時發送確認訊息，屆時請留意 LINE 通知點擊確認！", "size": "xs", "color": "#059669", "margin": "md", "wrap": True}
+                    {"type": "text", "text": "🔔 我們將於「看診前一天下午 5 點」發送出席確認通知，屆時請留意 LINE 訊息並點擊確認！", "size": "xs", "color": "#059669", "margin": "md", "wrap": True}
                 ]
             }
         }
