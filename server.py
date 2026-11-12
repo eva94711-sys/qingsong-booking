@@ -9,6 +9,8 @@ import sqlite3
 import uuid
 import csv
 import io
+import threading
+import time
 from datetime import datetime, timedelta
 import database
 
@@ -16,6 +18,15 @@ PORT = int(os.environ.get("PORT", 8080))
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PUBLIC_DIR = os.path.join(BASE_DIR, "public")
 DEFAULT_LINE_TOKEN = "yp6wkNJuQGfj9VJJwTWxAsZF9+uzK96hfuioq5jxJ8k0uSBhBGsrN8iiNOujlptTeWBbBe0xqDhmVXYbwTVDeo0NFFqQMe23nIvMMMg+UHc7khN6AchbB43a1rsaqTzQEi4S19/7ZGismZ/suDGUrwdB04t89/1O/w1cDnyilFU="
+
+_CACHE_LOCK = threading.Lock()
+_SCHEDULE_CACHE = {}
+_CACHE_TTL_SECONDS = 30
+
+
+def invalidate_schedule_cache():
+    with _CACHE_LOCK:
+        _SCHEDULE_CACHE.clear()
 
 
 def taiwan_now():
@@ -370,6 +381,13 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         now_tw = taiwan_now()
         start_date = now_tw.strftime("%Y-%m-%d")
         end_date = (now_tw + timedelta(days=days - 1)).strftime("%Y-%m-%d")
+        cache_key = ("summary", therapist_id, days, start_date)
+
+        with _CACHE_LOCK:
+            cached = _SCHEDULE_CACHE.get(cache_key)
+            if cached and (time.monotonic() - cached["ts"]) < _CACHE_TTL_SECONDS:
+                self.send_json(cached["payload"])
+                return
 
         conn = database.get_connection()
         cursor = conn.cursor()
@@ -406,37 +424,72 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
                 open_slots, closed_reason = self.compute_therapist_open_slots(
                     therapist_id, d_obj, standard_slots, weekly_schedules, day_ovs
                 )
-                remaining = [s for s in open_slots if (therapist_id, s) not in day_booked]
+                day_slots = [
+                    {
+                        "time": s,
+                        "available": (therapist_id, s) not in day_booked,
+                        "remaining_capacity": 0 if (therapist_id, s) in day_booked else 1
+                    }
+                    for s in open_slots
+                ]
+                remaining_count = sum(1 for item in day_slots if item["available"])
                 summary_days.append({
                     "date": d_str,
                     "is_closed": len(open_slots) == 0,
                     "reason": closed_reason if len(open_slots) == 0 else "",
                     "open_count": len(open_slots),
-                    "available_count": len(remaining)
+                    "available_count": remaining_count,
+                    "slots": day_slots
                 })
             else:
+                therapist_open_map = {}
                 union_open = set()
-                union_avail = set()
                 reasons = []
                 for t in active_therapists:
                     t_open, t_reason = self.compute_therapist_open_slots(
                         t["id"], d_obj, standard_slots, weekly_schedules, day_ovs
                     )
+                    therapist_open_map[t["id"]] = set(t_open)
                     union_open.update(t_open)
-                    for s in t_open:
-                        if (t["id"], s) not in day_booked:
-                            union_avail.add(s)
                     if not t_open and t_reason:
                         reasons.append(t_reason)
+
+                day_slots = []
+                for s in sorted(union_open):
+                    free_count = sum(
+                        1 for t in active_therapists
+                        if s in therapist_open_map[t["id"]] and (t["id"], s) not in day_booked
+                    )
+                    day_slots.append({
+                        "time": s,
+                        "available": free_count > 0,
+                        "remaining_capacity": free_count
+                    })
+                remaining_count = sum(1 for item in day_slots if item["available"])
                 summary_days.append({
                     "date": d_str,
                     "is_closed": len(union_open) == 0,
                     "reason": reasons[0] if (len(union_open) == 0 and reasons) else "",
                     "open_count": len(union_open),
-                    "available_count": len(union_avail)
+                    "available_count": remaining_count,
+                    "slots": day_slots
                 })
 
-        self.send_json({"therapist_id": therapist_id, "days": summary_days})
+        payload = {"therapist_id": therapist_id, "days": summary_days}
+        with _CACHE_LOCK:
+            _SCHEDULE_CACHE[cache_key] = {"ts": time.monotonic(), "payload": payload}
+            for item in summary_days:
+                _SCHEDULE_CACHE[("slots", therapist_id, item["date"])] = {
+                    "ts": time.monotonic(),
+                    "payload": {
+                        "date": item["date"],
+                        "is_closed": item["is_closed"],
+                        "reason": item["reason"],
+                        "therapist_id": therapist_id,
+                        "slots": item["slots"]
+                    }
+                }
+        self.send_json(payload)
 
     def api_get_slots(self, query):
         target_date = query.get("date", [""])[0]
@@ -451,6 +504,13 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         except ValueError:
             self.send_json({"error": "Invalid date format"}, status=400)
             return
+
+        cache_key = ("slots", therapist_id, target_date)
+        with _CACHE_LOCK:
+            cached = _SCHEDULE_CACHE.get(cache_key)
+            if cached and (time.monotonic() - cached["ts"]) < _CACHE_TTL_SECONDS:
+                self.send_json(cached["payload"])
+                return
 
         conn = database.get_connection()
         cursor = conn.cursor()
@@ -529,12 +589,15 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
                 })
 
         conn.close()
-        self.send_json({
+        payload = {
             "date": target_date,
             "is_closed": False,
             "therapist_id": therapist_id,
             "slots": slots_result
-        })
+        }
+        with _CACHE_LOCK:
+            _SCHEDULE_CACHE[cache_key] = {"ts": time.monotonic(), "payload": payload}
+        self.send_json(payload)
 
     def api_create_appointment(self, body):
         line_user_id = body.get("line_user_id", "").strip() or f"U_GUEST_{uuid.uuid4().hex[:8]}"
@@ -660,13 +723,15 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             """, (line_user_id, patient_name, patient_phone, patient_birthday, now_str))
 
             conn.commit()
+            invalidate_schedule_cache()
 
             # Generate Flex Message payload
             flex_receipt = self.generate_flex_receipt(apt_id, patient_name, assigned_therapist_name, appointment_date, appointment_time, visit_type, has_referral_slip)
 
             # Push instant receipt to patient's LINE chat
+            line_notified = False
             if line_user_id and not line_user_id.startswith("U_GUEST_"):
-                self.send_line_push_flex(line_user_id, "【青松物理治療所】預約掛號成功憑證", flex_receipt)
+                line_notified = self.send_line_push_flex(line_user_id, "【青松物理治療所】預約掛號成功憑證", flex_receipt)
 
             self.send_json({
                 "success": True,
@@ -674,6 +739,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "therapist_name": assigned_therapist_name,
                 "appointment_date": appointment_date,
                 "appointment_time": appointment_time,
+                "line_notified": line_notified,
                 "flex_receipt": flex_receipt
             })
 
@@ -721,6 +787,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         """, (now_str, reason, apt_id))
         conn.commit()
         conn.close()
+        invalidate_schedule_cache()
 
         self.send_json({
             "success": True,
@@ -828,6 +895,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         conn.commit()
         conn.close()
+        invalidate_schedule_cache()
         self.send_json({"success": True, "updated_id": apt_id, "status": new_status})
 
     # --- Admin Schedule Management Handlers ---
@@ -899,6 +967,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
                 created_ids.append(ov_id)
 
             conn.commit()
+            invalidate_schedule_cache()
             self.send_json({"success": True, "created_ids": created_ids})
         except Exception as e:
             conn.rollback()
@@ -912,6 +981,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         cursor.execute("DELETE FROM schedule_overrides WHERE id = ?", (ov_id,))
         conn.commit()
         conn.close()
+        invalidate_schedule_cache()
         self.send_json({"success": True, "deleted_id": ov_id})
 
     def api_admin_update_weekly_schedule(self, body):
@@ -940,6 +1010,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
             """, ("weekly_schedules", json.dumps(weekly_schedules, ensure_ascii=False)))
             conn.commit()
+            invalidate_schedule_cache()
             self.send_json({"success": True, "therapist_id": therapist_id, "schedule": cleaned_schedule})
         except Exception as e:
             conn.rollback()
@@ -973,6 +1044,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
             """, ("default_slots", json.dumps(cleaned)))
             conn.commit()
+            invalidate_schedule_cache()
             self.send_json({"success": True, "standard_slots": cleaned})
         except Exception as e:
             conn.rollback()
@@ -1175,6 +1247,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         conn.commit()
         conn.close()
+        invalidate_schedule_cache()
         self.send_json({"success": True, "handled": results})
 
     # --- LINE Flex Message Generators ---

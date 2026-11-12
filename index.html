@@ -91,7 +91,11 @@
 
       <!-- User Profile (For Patient LIFF) - NO Admin link visible here -->
       <div class="flex items-center space-x-2 flex-shrink-0">
-        <div class="flex items-center space-x-1.5 bg-black/20 border border-white/15 rounded-full px-2.5 py-1 text-xs">
+        <button id="btnHeaderLineLogin" onclick="loginWithLine()" class="hidden items-center space-x-1.5 bg-[#06C755] hover:bg-[#05b34c] text-white font-bold rounded-full px-3 py-1.5 text-xs shadow-xs transition cursor-pointer">
+          <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+          <span>LINE 登入收通知</span>
+        </button>
+        <div id="userProfilePill" class="flex items-center space-x-1.5 bg-black/20 border border-white/15 rounded-full px-2.5 py-1 text-xs">
           <img id="userAvatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=qingsong" class="w-5 h-5 rounded-full bg-white shadow-xs" alt="Avatar">
           <span id="userName" class="text-xs font-medium max-w-[90px] truncate text-white">LINE 用戶</span>
         </div>
@@ -135,7 +139,21 @@
 
       <!-- ================= TAB 1: 預約掛號 ================= -->
       <section id="tab-booking" class="tab-pane space-y-5">
-        
+
+        <!-- Guest Browser LINE Login Notice Banner -->
+        <div id="guestLineNoticeBanner" class="hidden bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+          <div class="flex items-start gap-2.5 text-xs text-emerald-950 leading-relaxed">
+            <i data-lucide="bell-ring" class="w-4 h-4 text-[#06C755] flex-shrink-0 mt-0.5"></i>
+            <div>
+              <strong>目前為網頁訪客預約模式：</strong>直接填表一樣可以完成預約；<span class="text-emerald-800">若希望透過 LINE 接收預約憑證與看診前一天下午 5 點自動提醒，請先登入 LINE（並加入官方帳號 @557fabgw 好友）。</span>
+            </div>
+          </div>
+          <button onclick="loginWithLine()" class="flex-shrink-0 px-3.5 py-2 bg-[#06C755] hover:bg-[#05b34c] text-white font-bold rounded-xl text-xs shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+            <i data-lucide="log-in" class="w-3.5 h-3.5"></i>
+            <span>登入 LINE 接收通知</span>
+          </button>
+        </div>
+
         <!-- Step Progress Indicator -->
         <div class="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-xs">
           <div class="flex items-center justify-between text-xs font-medium text-slate-500 px-2 max-w-xl mx-auto">
@@ -526,12 +544,12 @@
           </div>
 
           <!-- LINE Flex Card Preview -->
-          <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-left">
-            <div class="text-xs font-bold text-slate-500 mb-1.5 flex items-center gap-1.5">
-              <i data-lucide="bell" class="w-4 h-4 text-pine-600"></i> LINE 24H 動態出席確認推播：
+          <div id="successLineStatusBox" class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-left">
+            <div id="successLineStatusTitle" class="text-xs font-bold text-slate-600 mb-1.5 flex items-center gap-1.5">
+              <i data-lucide="bell" class="w-4 h-4 text-pine-600"></i> LINE 出席確認推播：
             </div>
-            <div class="text-xs text-slate-600 leading-relaxed">
-              系統將於<strong>就診前 24 小時</strong>在 LINE 發送出席確認卡片，屆時請點選確認；若臨時不克前來點擊取消，時段將立即自動釋出給其他病友。
+            <div id="successLineStatusDesc" class="text-xs text-slate-600 leading-relaxed">
+              系統將於<strong>看診前一天下午 17:00</strong> 在 LINE 發送出席確認卡片，屆時請點選確認；若臨時不克前來點擊取消，時段將立即自動釋出給其他病友。
             </div>
           </div>
 
@@ -1014,7 +1032,7 @@ async function initLiff() {
   try {
     if (window.liff) {
       await liff.init({ liffId: LIFF_ID });
-      if (liff.isInClient() && liff.isLoggedIn()) {
+      if (liff.isLoggedIn()) {
         const profile = await liff.getProfile();
         currentLineUser.userId = profile.userId;
         currentLineUser.displayName = profile.displayName;
@@ -1022,26 +1040,56 @@ async function initLiff() {
           currentLineUser.pictureUrl = profile.pictureUrl;
         }
         updateUserUI();
-      } else {
-        // 非 LINE 內開啟：清除任何舊的測試用戶 localStorage，使用空白訪客
-        localStorage.removeItem('qingsong_test_user');
-        currentLineUser.userId = 'U_GUEST_' + Math.random().toString(36).slice(2, 10);
-        currentLineUser.displayName = '';
-        updateUserUI();
+        return;
       }
     }
   } catch (err) {
     console.warn('LIFF init fallback:', err);
-    currentLineUser.userId = 'U_GUEST_' + Math.random().toString(36).slice(2, 10);
-    currentLineUser.displayName = '';
-    updateUserUI();
   }
+  // 未登入 LINE（一般網頁訪客）
+  localStorage.removeItem('qingsong_test_user');
+  currentLineUser.userId = 'U_GUEST_' + Math.random().toString(36).slice(2, 10);
+  currentLineUser.displayName = '';
+  updateUserUI();
+}
+
+function loginWithLine() {
+  if (window.liff && typeof liff.login === 'function') {
+    try {
+      liff.login({ redirectUri: window.location.href });
+      return;
+    } catch (e) {
+      // fallback below
+    }
+  }
+  window.location.href = 'https://liff.line.me/2012458374-x8h6v4Dh';
 }
 
 function updateUserUI() {
+  const isGuest = !currentLineUser.userId || currentLineUser.userId.startsWith('U_GUEST_');
+  const loginBtn = document.getElementById('btnHeaderLineLogin');
+  const profilePill = document.getElementById('userProfilePill');
+  const guestBanner = document.getElementById('guestLineNoticeBanner');
+
+  if (isGuest) {
+    if (loginBtn) {
+      loginBtn.classList.remove('hidden');
+      loginBtn.classList.add('flex');
+    }
+    if (profilePill) profilePill.classList.add('hidden');
+    if (guestBanner) guestBanner.classList.remove('hidden');
+  } else {
+    if (loginBtn) {
+      loginBtn.classList.add('hidden');
+      loginBtn.classList.remove('flex');
+    }
+    if (profilePill) profilePill.classList.remove('hidden');
+    if (guestBanner) guestBanner.classList.add('hidden');
+  }
+
   const name = currentLineUser.displayName;
   const nameEl = document.getElementById('userName');
-  if (nameEl) nameEl.textContent = name || '';
+  if (nameEl) nameEl.textContent = name || 'LINE 已連線';
   const avatarEl = document.getElementById('userAvatar');
   if (avatarEl && currentLineUser.pictureUrl) avatarEl.src = currentLineUser.pictureUrl;
   const uidDisplay = document.getElementById('currentUidDisplay');
@@ -1486,6 +1534,7 @@ function goToStep(step) {
 
 // --- Date Picker: Dynamically syncs with clinic schedule & therapist overrides ---
 let scheduleSummaryCache = {};
+let scheduleSummaryTimestamp = 0;
 
 async function generateDateList() {
   const container = document.getElementById('datePickerList');
@@ -1502,6 +1551,7 @@ async function generateDateList() {
         data.days.forEach(item => {
           summaryMap[item.date] = item;
         });
+        scheduleSummaryTimestamp = Date.now();
       }
     }
   } catch (e) {
@@ -1661,7 +1711,7 @@ function selectDate(dateStr, isWeekend) {
   }
 }
 
-// --- 載入時段（即時從後端取得已被預約的時段並鎖定） ---
+// --- 載入時段（優先使用已預抓之 30 天班表快取達成 0 秒即時顯示） ---
 async function fetchSlots(dateStr) {
   const loading = document.getElementById('slotsLoading');
   const container = document.getElementById('slotsContainer');
@@ -1669,6 +1719,25 @@ async function fetchSlots(dateStr) {
   const closedBadge = document.getElementById('closedBadge');
   const noticeTitle = document.getElementById('closedNoticeTitle');
   const noticeDesc = document.getElementById('closedNoticeDesc');
+
+  const cachedDay = scheduleSummaryCache[dateStr];
+  const isFreshCache = cachedDay && Array.isArray(cachedDay.slots) && (Date.now() - scheduleSummaryTimestamp) < 25000;
+  if (isFreshCache) {
+    loading.classList.add('hidden');
+    if (cachedDay.is_closed) {
+      container.classList.add('hidden');
+      if (closedBadge) closedBadge.classList.remove('hidden');
+      if (noticeTitle) noticeTitle.textContent = cachedDay.reason || '青松物理治療所 本日休診';
+      if (noticeDesc) noticeDesc.textContent = '請點選上方其他可預約日期或切換物理治療師。';
+      weekendNotice.classList.remove('hidden');
+      return;
+    }
+    if (closedBadge) closedBadge.classList.add('hidden');
+    weekendNotice.classList.add('hidden');
+    container.classList.remove('hidden');
+    renderSlotButtons(cachedDay.slots);
+    return;
+  }
 
   // 先清空並顯示載入中
   loading.classList.remove('hidden');
@@ -1824,8 +1893,32 @@ async function submitBooking() {
     document.getElementById('successDate').textContent = result.appointment_date;
     document.getElementById('successTime').textContent = result.appointment_time;
     const stEl = document.getElementById('successTherapist');
-    if (stEl) stEl.textContent = (result.therapist_name ? result.therapist_name + ' 物理治療師' : '診所安排');
+    if (stEl) {
+      stEl.textContent = result.therapist_name === '劉韋綸'
+        ? '劉韋綸 院長'
+        : (result.therapist_name ? result.therapist_name + ' 物理治療師' : '診所安排');
+    }
 
+    const lineBox = document.getElementById('successLineStatusBox');
+    const lineTitle = document.getElementById('successLineStatusTitle');
+    const lineDesc = document.getElementById('successLineStatusDesc');
+    const isGuest = !currentLineUser.userId || currentLineUser.userId.startsWith('U_GUEST_');
+    if (lineBox && lineTitle && lineDesc) {
+      if (isGuest) {
+        lineBox.className = 'p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-left';
+        lineTitle.innerHTML = '<i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600"></i> 訪客預約提醒（未綁定 LINE 通知）：';
+        lineDesc.innerHTML = '您剛才使用網頁訪客模式預約，系統已為您保留時段，但<strong>無法主動傳送 LINE 卡片通知</strong>（診所將以電話聯絡確認）。若希望改用 LINE 收通知，歡迎從官方帳號 <code>@557fabgw</code> 進入預約！';
+      } else {
+        lineBox.className = 'p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-left';
+        lineTitle.innerHTML = '<i data-lucide="bell" class="w-4 h-4 text-pine-600"></i> LINE 出席確認推播：';
+        lineDesc.innerHTML = '系統已發送預約憑證至您的 LINE，並將於<strong>看診前一天下午 17:00</strong> 發送出席確認卡片，屆時請點選確認；若臨時不克前來點擊取消，時段將立即釋出給其他病友。';
+      }
+      lucide.createIcons();
+    }
+
+    scheduleSummaryCache = {};
+    scheduleSummaryTimestamp = 0;
+    generateDateList();
     loadMyAppointments();
     checkPatientMemory();
   } catch (err) {
