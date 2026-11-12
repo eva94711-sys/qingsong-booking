@@ -336,13 +336,13 @@
               <span>正在載入時段空檔...</span>
             </div>
 
-            <!-- Closed Notice when Saturday or Sunday selected -->
+            <!-- Closed Notice when Saturday, Sunday, or Holiday/Off day selected -->
             <div id="weekendClosedNotice" class="hidden py-8 px-4 text-center bg-rose-50 border border-rose-200 rounded-2xl space-y-2">
               <div class="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
                 <i data-lucide="calendar-x" class="w-5 h-5"></i>
               </div>
-              <h4 class="font-bold text-sm text-rose-800">青松物理治療所 週六、週日固定休診</h4>
-              <p class="text-xs text-slate-500">門診時間為週一至週五，請點選上方其他工作日預約看診時段。</p>
+              <h4 id="closedNoticeTitle" class="font-bold text-sm text-rose-800">青松物理治療所 本日休診</h4>
+              <p id="closedNoticeDesc" class="text-xs text-slate-500">門診時間為週一至週五，請點選上方其他可預約日期。</p>
             </div>
 
             <!-- Slots Grid (3 rows: 09:00-11:00 / 15:00-17:00 / 19:00-20:00) -->
@@ -1269,10 +1269,8 @@ function onTherapistChange(therapistId, therapistName) {
     }
   });
 
-  // 若第二步已有選日期，重新獲取該治療師的可用時段
-  if (bookingData.date) {
-    fetchSlots(bookingData.date);
-  }
+  // 若第二步已有選日期或需更新排班，重新載入日期與該治療師的可用時段
+  generateDateList();
 }
 
 // --- Step 1: Visit Type & Referral Check ---
@@ -1486,64 +1484,101 @@ function goToStep(step) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// --- Date Picker: Open Mon-Fri, Closed Sat & Sun (Only 禮拜六日休息) ---
-function generateDateList() {
+// --- Date Picker: Dynamically syncs with clinic schedule & therapist overrides ---
+let scheduleSummaryCache = {};
+
+async function generateDateList() {
   const container = document.getElementById('datePickerList');
   if (!container) return;
-  container.innerHTML = '';
   const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
 
-  // 使用本地時間（避免時區問題造成週六顯示錯誤）
+  const tId = bookingData.therapistId || 'any';
+  let summaryMap = {};
+  try {
+    const res = await fetch('/api/schedule-summary?therapist_id=' + encodeURIComponent(tId) + '&days=30');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.days)) {
+        data.days.forEach(item => {
+          summaryMap[item.date] = item;
+        });
+      }
+    }
+  } catch (e) {
+    // Fallback to default Mon-Fri if offline
+  }
+  scheduleSummaryCache = summaryMap;
+
+  container.innerHTML = '';
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   let firstAvailableWeekday = null;
+  let keepPreviousDate = false;
 
   for (let i = 0; i < 30; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
 
-    // 本地時間取星期幾（0=日, 1=一, ..., 5=五, 6=六）
     const dayOfWeek = d.getDay();
-    // 週六(6) 和 週日(0) 都休診
-    const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
-
-    // 轉成 YYYY-MM-DD（本地時間，不用 toISOString 避免時區偏移）
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     const dateStr = `${y}-${m}-${day}`;
 
+    const info = summaryMap[dateStr];
+    const isClosed = info ? Boolean(info.is_closed) : (dayOfWeek === 0 || dayOfWeek === 6);
+    const isFull = info ? (!info.is_closed && info.available_count === 0) : false;
+
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.id = `date-btn-${dateStr}`;
     btn.dataset.date = dateStr;
-    btn.dataset.isWeekend = isWeekend ? 'true' : 'false';
+    btn.dataset.isWeekend = isClosed ? 'true' : 'false';
+    btn.dataset.isFull = isFull ? 'true' : 'false';
+
+    let badgeClass = 'text-emerald-700 bg-emerald-50';
+    let badgeText = '可約';
+    if (isClosed) {
+      badgeClass = 'text-rose-500 bg-rose-50';
+      badgeText = '休診';
+    } else if (isFull) {
+      badgeClass = 'text-amber-700 bg-amber-50';
+      badgeText = '額滿';
+    }
 
     btn.className = `flex-shrink-0 w-16 py-3 px-1 rounded-2xl border-2 text-center transition flex flex-col items-center justify-center ${
-      isWeekend
+      isClosed
         ? 'border-slate-200 bg-slate-50 text-slate-400 opacity-60 cursor-not-allowed'
         : 'border-slate-200 bg-white hover:border-pine-600 hover:bg-pine-50 text-slate-800 cursor-pointer'
     }`;
 
     btn.innerHTML = `
-      <span class="text-xs font-bold ${isWeekend ? 'text-slate-400' : 'text-slate-500'}">週${weekdays[dayOfWeek]}</span>
-      <span class="text-sm md:text-base font-extrabold my-0.5 ${isWeekend ? 'text-slate-400' : 'text-slate-900'}">${d.getMonth() + 1}/${d.getDate()}</span>
-      <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${isWeekend ? 'text-rose-500 bg-rose-50' : 'text-emerald-700 bg-emerald-50'}">${isWeekend ? '休診' : '可約'}</span>
+      <span class="text-xs font-bold ${isClosed ? 'text-slate-400' : 'text-slate-500'}">週${weekdays[dayOfWeek]}</span>
+      <span class="text-sm md:text-base font-extrabold my-0.5 ${isClosed ? 'text-slate-400' : 'text-slate-900'}">${d.getMonth() + 1}/${d.getDate()}</span>
+      <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${badgeClass}">${badgeText}</span>
     `;
 
-    if (!isWeekend) {
+    if (!isClosed) {
       btn.onclick = () => selectDate(dateStr, false);
+      if (!firstAvailableWeekday && !isFull) {
+        firstAvailableWeekday = dateStr;
+      }
+      if (bookingData.date === dateStr) {
+        keepPreviousDate = true;
+      }
     }
     container.appendChild(btn);
-
-    if (!isWeekend && !firstAvailableWeekday) {
-      firstAvailableWeekday = dateStr;
-    }
   }
 
-  // 自動選取最近一個上班日
-  if (firstAvailableWeekday) {
+  if (!firstAvailableWeekday) {
+    const firstNonClosed = Array.from(container.querySelectorAll('button')).find(b => b.dataset.isWeekend !== 'true');
+    if (firstNonClosed) firstAvailableWeekday = firstNonClosed.dataset.date;
+  }
+
+  if (keepPreviousDate && bookingData.date) {
+    selectDate(bookingData.date, false);
+  } else if (firstAvailableWeekday) {
     selectDate(firstAvailableWeekday, false);
   }
 }
@@ -1557,21 +1592,30 @@ function selectDate(dateStr, isWeekend) {
 
   // Refresh all date buttons styling
   document.querySelectorAll('#datePickerList button').forEach(b => {
-    const bWeekend = (b.dataset.isWeekend === 'true');
+    const bClosed = (b.dataset.isWeekend === 'true');
+    const bFull = (b.dataset.isFull === 'true');
     if (b.dataset.date === dateStr) {
       b.className = 'flex-shrink-0 w-16 py-3 px-1 rounded-2xl border-2 border-pine-700 bg-pine-700 text-white shadow-md transition flex flex-col items-center justify-center cursor-pointer';
-      // 解析日期（本地時間）
       const parts = b.dataset.date.split('-');
       const dObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
       const wds = ['日', '一', '二', '三', '四', '五', '六'];
       b.innerHTML = `
         <span class="text-xs font-bold text-white">週${wds[dObj.getDay()]}</span>
         <span class="text-sm md:text-base font-extrabold my-0.5 text-white">${dObj.getMonth() + 1}/${dObj.getDate()}</span>
-        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${bWeekend ? 'text-rose-200 bg-rose-600' : 'text-pine-200 bg-pine-800'}">${bWeekend ? '休診' : '已選'}</span>
+        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${bClosed ? 'text-rose-200 bg-rose-600' : 'text-pine-200 bg-pine-800'}">${bClosed ? '休診' : '已選'}</span>
       `;
     } else {
+      let badgeClass = 'text-emerald-700 bg-emerald-50';
+      let badgeText = '可約';
+      if (bClosed) {
+        badgeClass = 'text-rose-500 bg-rose-50';
+        badgeText = '休診';
+      } else if (bFull) {
+        badgeClass = 'text-amber-700 bg-amber-50';
+        badgeText = '額滿';
+      }
       b.className = `flex-shrink-0 w-16 py-3 px-1 rounded-2xl border-2 text-center transition flex flex-col items-center justify-center ${
-        bWeekend
+        bClosed
           ? 'border-slate-200 bg-slate-50 text-slate-400 opacity-60 cursor-not-allowed'
           : 'border-slate-200 bg-white hover:border-pine-600 hover:bg-pine-50 text-slate-800 cursor-pointer'
       }`;
@@ -1579,9 +1623,9 @@ function selectDate(dateStr, isWeekend) {
       const dObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
       const wds = ['日', '一', '二', '三', '四', '五', '六'];
       b.innerHTML = `
-        <span class="text-xs font-bold ${bWeekend ? 'text-slate-400' : 'text-slate-500'}">週${wds[dObj.getDay()]}</span>
-        <span class="text-sm md:text-base font-extrabold my-0.5 ${bWeekend ? 'text-slate-400' : 'text-slate-900'}">${dObj.getMonth() + 1}/${dObj.getDate()}</span>
-        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${bWeekend ? 'text-rose-500 bg-rose-50' : 'text-emerald-700 bg-emerald-50'}">${bWeekend ? '休診' : '可約'}</span>
+        <span class="text-xs font-bold ${bClosed ? 'text-slate-400' : 'text-slate-500'}">週${wds[dObj.getDay()]}</span>
+        <span class="text-sm md:text-base font-extrabold my-0.5 ${bClosed ? 'text-slate-400' : 'text-slate-900'}">${dObj.getMonth() + 1}/${dObj.getDate()}</span>
+        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${badgeClass}">${badgeText}</span>
       `;
     }
   });
@@ -1622,6 +1666,9 @@ async function fetchSlots(dateStr) {
   const loading = document.getElementById('slotsLoading');
   const container = document.getElementById('slotsContainer');
   const weekendNotice = document.getElementById('weekendClosedNotice');
+  const closedBadge = document.getElementById('closedBadge');
+  const noticeTitle = document.getElementById('closedNoticeTitle');
+  const noticeDesc = document.getElementById('closedNoticeDesc');
 
   // 先清空並顯示載入中
   loading.classList.remove('hidden');
@@ -1636,6 +1683,9 @@ async function fetchSlots(dateStr) {
     loading.classList.add('hidden');
 
     if (data.is_closed) {
+      if (closedBadge) closedBadge.classList.remove('hidden');
+      if (noticeTitle) noticeTitle.textContent = data.reason || '青松物理治療所 本日休診';
+      if (noticeDesc) noticeDesc.textContent = '請點選上方其他可預約日期或切換物理治療師。';
       weekendNotice.classList.remove('hidden');
       return;
     }

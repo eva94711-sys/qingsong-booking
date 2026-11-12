@@ -85,6 +85,9 @@
   <!-- Content Container -->
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 space-y-6 w-full">
 
+    <!-- Database Persistence Status Banner -->
+    <div id="dbStatusBanner" class="hidden rounded-xl border px-4 py-3 text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"></div>
+
     <!-- KPI Stats Cards -->
     <div class="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
       <!-- Total Active -->
@@ -265,60 +268,182 @@
     </div>
 
     <!-- TAB 3: 治療師排班與時段 -->
-    <div id="adminTab-schedules" class="hidden space-y-4">
-      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
-        <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
-          <i data-lucide="calendar-range" class="w-4 h-4 text-pine-700"></i> 青松物理治療所 - 兩位治療師排班控管
-        </h2>
+    <div id="adminTab-schedules" class="hidden space-y-5">
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <!-- Therapist 1: 劉院長 -->
-          <div class="p-4 rounded-xl border border-pine-200 bg-pine-50/20 space-y-3">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center space-x-2.5">
-                <img src="/images/therapist_liu.svg" class="w-9 h-9 rounded-full border border-pine-300" alt="劉韋綸">
-                <div>
-                  <h3 class="font-bold text-sm text-slate-900">劉韋綸 院長</h3>
-                  <span class="text-[11px] text-pine-700">在診狀態：正常門診中</span>
-                </div>
-              </div>
-              <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">排班生效中</span>
-            </div>
-            <div class="text-xs text-slate-600 space-y-1">
-              <div>常態排班：週一至週五 (全日) · 週六 (上午/下午)</div>
-              <div>專長門診：骨骼肌肉徒手、動作控制、院長指定治療</div>
+      <!-- 兩位治療師狀態卡片 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="p-4 rounded-xl border border-pine-200 bg-white shadow-xs flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <img src="/images/therapist_liu.svg" class="w-10 h-10 rounded-full border border-pine-300" alt="劉韋綸">
+            <div>
+              <h3 class="font-bold text-sm text-slate-900">劉韋綸 院長</h3>
+              <p class="text-[11px] text-slate-500">骨骼肌肉徒手、動作控制、院長指定治療</p>
             </div>
           </div>
-
-          <!-- Therapist 2: 洪治療師 -->
-          <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center space-x-2.5">
-                <img src="/images/therapist_hong.png" class="w-9 h-9 rounded-full object-cover object-top border border-slate-300" alt="洪嘉良">
-                <div>
-                  <h3 class="font-bold text-sm text-slate-900">洪嘉良 物理治療師</h3>
-                  <span class="text-[11px] text-slate-600">在診狀態：正常門診中</span>
-                </div>
-              </div>
-              <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">排班生效中</span>
-            </div>
-            <div class="text-xs text-slate-600 space-y-1">
-              <div>常態排班：週一至週五 (全日) · 週六 (上午/下午)</div>
-              <div>專長門診：皮拉提斯器械、肌肉骨骼、術後復健、疤痕手療</div>
-            </div>
-          </div>
+          <span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">排班控管中</span>
         </div>
 
-        <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
-          <div class="font-bold text-slate-800">全所門診常態營業時段（週一至週五，週六日休診）：</div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-slate-600">
-            <div class="bg-white p-2.5 rounded-lg border"><strong>上午時段：</strong>09:00, 10:00, 11:00</div>
-            <div class="bg-white p-2.5 rounded-lg border"><strong>下午時段：</strong>15:00, 16:00, 17:00</div>
-            <div class="bg-white p-2.5 rounded-lg border"><strong>晚間時段：</strong>19:00, 20:00</div>
+        <div class="p-4 rounded-xl border border-slate-200 bg-white shadow-xs flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <img src="/images/therapist_hong.png" class="w-10 h-10 rounded-full object-cover object-top border border-slate-300" alt="洪嘉良">
+            <div>
+              <h3 class="font-bold text-sm text-slate-900">洪嘉良 物理治療師</h3>
+              <p class="text-[11px] text-slate-500">肌肉骨骼、術後物理治療、銀髮族肌力平衡</p>
+            </div>
           </div>
-          <p class="text-rose-600 font-bold mt-2">* 星期六、星期日為固定休診日；若有特定假期或請假，可在此調整。</p>
+          <span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">排班控管中</span>
         </div>
       </div>
+
+      <!-- 區塊一：特定日期休診／請假／臨時時段調整 -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <!-- 新增異動表單 -->
+        <div class="lg:col-span-5 bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
+          <div>
+            <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <i data-lucide="calendar-off" class="w-4 h-4 text-pine-700"></i>
+              <span>新增特定日期排班調整（請假 / 公休 / 加開）</span>
+            </h2>
+            <p class="text-xs text-slate-500 mt-1">設定國定假日全所公休、治療師單日請假，或關閉／加開特定時段。儲存後病患端會即時更新！</p>
+          </div>
+
+          <div class="space-y-3 text-xs">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">對象</label>
+              <select id="overrideTherapist" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-pine-600 focus:outline-none">
+                <option value="all">🏥 全所統一調整（例如：國定假日公休）</option>
+                <option value="th_liu">👨‍⚕️ 劉韋綸 院長</option>
+                <option value="th_hong">👨‍⚕️ 洪嘉良 物理治療師</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">調整日期</label>
+              <input type="date" id="overrideDate" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-pine-600 focus:outline-none">
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1.5">調整方式</label>
+              <div class="grid grid-cols-2 gap-2">
+                <label class="flex items-center gap-1.5 p-2.5 border rounded-lg cursor-pointer hover:bg-rose-50/40 has-[:checked]:border-rose-600 has-[:checked]:bg-rose-50">
+                  <input type="radio" name="overrideMode" value="day_off" checked onchange="toggleOverrideSlotPicker()">
+                  <span class="font-bold text-rose-700">🚫 整日休診/請假</span>
+                </label>
+                <label class="flex items-center gap-1.5 p-2.5 border rounded-lg cursor-pointer hover:bg-amber-50/40 has-[:checked]:border-amber-600 has-[:checked]:bg-amber-50">
+                  <input type="radio" name="overrideMode" value="slots_off" onchange="toggleOverrideSlotPicker()">
+                  <span class="font-bold text-amber-800">⏰ 關閉指定時段</span>
+                </label>
+                <label class="flex items-center gap-1.5 p-2.5 border rounded-lg cursor-pointer hover:bg-emerald-50/40 has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50">
+                  <input type="radio" name="overrideMode" value="day_open" onchange="toggleOverrideSlotPicker()">
+                  <span class="font-bold text-emerald-700">✅ 特別加開整日</span>
+                </label>
+                <label class="flex items-center gap-1.5 p-2.5 border rounded-lg cursor-pointer hover:bg-pine-50/40 has-[:checked]:border-pine-600 has-[:checked]:bg-pine-50">
+                  <input type="radio" name="overrideMode" value="slots_open" onchange="toggleOverrideSlotPicker()">
+                  <span class="font-bold text-pine-700">✨ 特別加開時段</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- 特定時段多選區 -->
+            <div id="overrideSlotPickerWrap" class="hidden p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-700">請勾選要調整的時段（可複選）：</span>
+                <button type="button" onclick="selectAllOverrideSlots()" class="text-[11px] text-pine-700 hover:underline font-bold">全選/取消</button>
+              </div>
+              <div id="overrideSlotCheckboxes" class="grid grid-cols-4 gap-2"></div>
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">原因備註（選填，休診時病患端可看到原因）</label>
+              <input type="text" id="overrideReason" placeholder="例如：國定假日公休、外出進修、內部會議" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-pine-600 focus:outline-none">
+            </div>
+
+            <button onclick="submitScheduleOverride()" class="w-full py-2.5 bg-pine-700 hover:bg-pine-800 text-white font-bold rounded-lg shadow-xs transition flex items-center justify-center gap-1.5">
+              <i data-lucide="save" class="w-4 h-4"></i>
+              <span>確認儲存排班異動</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 已設定異動清單 -->
+        <div class="lg:col-span-7 bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <i data-lucide="list-checks" class="w-4 h-4 text-pine-700"></i>
+              <span>已設定的特定日期異動清單</span>
+            </h3>
+            <button onclick="loadScheduleConfig()" class="text-xs text-slate-500 hover:text-pine-700 flex items-center gap-1">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> 重新整理
+            </button>
+          </div>
+
+          <div class="overflow-x-auto border border-slate-100 rounded-lg">
+            <table class="min-w-full divide-y divide-slate-200 text-xs text-left">
+              <thead class="bg-slate-50 text-slate-600 font-bold">
+                <tr>
+                  <th class="px-3 py-2.5">日期</th>
+                  <th class="px-3 py-2.5">對象</th>
+                  <th class="px-3 py-2.5">時段 / 類型</th>
+                  <th class="px-3 py-2.5">備註原因</th>
+                  <th class="px-3 py-2.5 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody id="overridesTableBody" class="divide-y divide-slate-100">
+                <tr><td colspan="5" class="px-3 py-6 text-center text-slate-400">載入中...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 區塊二：治療師每週常態固定班表 -->
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <i data-lucide="calendar-range" class="w-4 h-4 text-pine-700"></i>
+              <span>治療師每週常態固定班表（週一～週日）</span>
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">點擊時段即可切換該治療師每週固定的可預約時段（綠色＝開放預約；灰色＝固定休診）。預設週六、週日為固定休診。</p>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button onclick="selectWeeklyTherapist('th_liu')" id="weeklyTab-th_liu" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-pine-700 text-white transition">劉韋綸 院長</button>
+            <button onclick="selectWeeklyTherapist('th_hong')" id="weeklyTab-th_hong" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition">洪嘉良 物理治療師</button>
+          </div>
+        </div>
+
+        <div id="weeklyScheduleGrid" class="space-y-2"></div>
+
+        <div class="flex justify-end pt-2 border-t border-slate-100">
+          <button onclick="saveWeeklySchedule()" class="px-5 py-2 bg-pine-700 hover:bg-pine-800 text-white text-xs font-bold rounded-lg shadow-xs transition flex items-center gap-1.5">
+            <i data-lucide="check-circle" class="w-4 h-4"></i>
+            <span>儲存此治療師的常態班表</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 區塊三：全所標準門診時段管理 -->
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <i data-lucide="clock" class="w-4 h-4 text-pine-700"></i>
+              <span>全所標準看診時段清單</span>
+            </h3>
+            <p class="text-xs text-slate-500 mt-0.5">預設為 09:00, 10:00, 11:00, 15:00, 16:00, 17:00, 19:00, 20:00。如需新增或移除門診整點時段可在此設定。</p>
+          </div>
+        </div>
+
+        <div id="defaultSlotsChips" class="flex flex-wrap gap-2"></div>
+
+        <div class="flex flex-wrap items-center gap-2 pt-2">
+          <input type="time" id="newSlotInput" class="px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-pine-600 focus:outline-none">
+          <button onclick="addDefaultSlot()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-lg text-xs font-bold transition">+ 加入時段</button>
+          <button onclick="saveDefaultSlots()" class="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition ml-auto">儲存標準時段設定</button>
+        </div>
+      </div>
+
     </div>
 
   </main>
@@ -396,15 +521,32 @@
 
   <script>
     let allAppointments = [];
+    let scheduleConfig = {
+      standard_slots: ['09:00', '10:00', '11:00', '15:00', '16:00', '17:00', '19:00', '20:00'],
+      weekly_schedules: {},
+      therapists: [],
+      overrides: []
+    };
+    let activeWeeklyTherapist = 'th_liu';
+
+    function formatLocalDate(dateObj) {
+      const y = dateObj.getFullYear();
+      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const d = String(dateObj.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
 
     document.addEventListener('DOMContentLoaded', () => {
       lucide.createIcons();
       loadStats();
       loadAppointments();
-      // Set default manual date to tomorrow
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      document.getElementById('manualDate').value = tomorrow.toISOString().split('T')[0];
+      loadScheduleConfig();
+
+      const today = new Date();
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+      document.getElementById('manualDate').value = formatLocalDate(tomorrow);
+      document.getElementById('overrideDate').value = formatLocalDate(tomorrow);
     });
 
     function switchAdminTab(tabId) {
@@ -421,6 +563,9 @@
           btn.classList.add('border-transparent', 'text-slate-500');
         }
       });
+      if (tabId === 'schedules') {
+        loadScheduleConfig();
+      }
       lucide.createIcons();
     }
 
@@ -440,6 +585,31 @@
           badge.classList.remove('hidden');
         } else {
           badge.classList.add('hidden');
+        }
+
+        const banner = document.getElementById('dbStatusBanner');
+        if (banner && data.db_info) {
+          banner.classList.remove('hidden');
+          if (data.db_info.persistent) {
+            banner.className = 'rounded-xl border border-emerald-200 bg-emerald-50/70 text-emerald-900 px-4 py-2.5 text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2';
+            banner.innerHTML = `
+              <div class="flex items-center gap-2 font-bold">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                <span>雲端資料庫已連線：${data.db_info.label}</span>
+              </div>
+              <span class="text-[11px] text-emerald-700">所有預約與排班資料皆永久安全保存</span>
+            `;
+          } else {
+            banner.className = 'rounded-xl border border-amber-300 bg-amber-50 text-amber-900 px-4 py-3 text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2';
+            banner.innerHTML = `
+              <div class="space-y-0.5">
+                <div class="font-bold flex items-center gap-1.5 text-amber-950">
+                  <span>⚠️ 資料儲存提醒：${data.db_info.label}</span>
+                </div>
+                <p class="text-[11px] text-amber-800">${data.db_info.warning || ''}</p>
+              </div>
+            `;
+          }
         }
       } catch (e) {
         console.error(e);
@@ -654,6 +824,407 @@
         loadStats();
       } catch (e) {
         alert('新增失敗');
+      }
+    }
+
+    // --- 治療師排班與時段控管 ---
+    async function loadScheduleConfig() {
+      try {
+        const res = await fetch('/api/admin/schedule-config');
+        const data = await res.json();
+        scheduleConfig = data;
+
+        // Sync manualTime dropdown options
+        const manualTimeSel = document.getElementById('manualTime');
+        if (manualTimeSel && Array.isArray(data.standard_slots)) {
+          const prev = manualTimeSel.value;
+          manualTimeSel.innerHTML = data.standard_slots
+            .map(s => `<option value="${s}">${s}</option>`)
+            .join('');
+          if (data.standard_slots.includes(prev)) manualTimeSel.value = prev;
+        }
+
+        renderOverrideSlotCheckboxes();
+        renderOverridesTable();
+        renderWeeklyScheduleGrid();
+        renderDefaultSlotsChips();
+      } catch (e) {
+        console.error('載入排班設定失敗', e);
+      }
+    }
+
+    function getSelectedOverrideMode() {
+      const radios = document.getElementsByName('overrideMode');
+      for (const r of radios) {
+        if (r.checked) return r.value;
+      }
+      return 'day_off';
+    }
+
+    function toggleOverrideSlotPicker() {
+      const mode = getSelectedOverrideMode();
+      const wrap = document.getElementById('overrideSlotPickerWrap');
+      if (mode === 'slots_off' || mode === 'slots_open') {
+        wrap.classList.remove('hidden');
+      } else {
+        wrap.classList.add('hidden');
+      }
+    }
+
+    function renderOverrideSlotCheckboxes() {
+      const container = document.getElementById('overrideSlotCheckboxes');
+      if (!container) return;
+      container.innerHTML = '';
+      (scheduleConfig.standard_slots || []).forEach(slot => {
+        const label = document.createElement('label');
+        label.className = 'flex items-center gap-1.5 px-2 py-1.5 bg-white border border-slate-200 rounded-md cursor-pointer hover:border-pine-500 text-xs font-bold text-slate-700';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.name = 'overrideSlotCb';
+        cb.value = slot;
+        cb.className = 'text-pine-700 rounded focus:ring-pine-600';
+        const span = document.createElement('span');
+        span.textContent = slot;
+        label.appendChild(cb);
+        label.appendChild(span);
+        container.appendChild(label);
+      });
+    }
+
+    function selectAllOverrideSlots() {
+      const cbs = Array.from(document.querySelectorAll('input[name="overrideSlotCb"]'));
+      const allChecked = cbs.every(cb => cb.checked);
+      cbs.forEach(cb => { cb.checked = !allChecked; });
+    }
+
+    async function submitScheduleOverride() {
+      const therapistId = document.getElementById('overrideTherapist').value;
+      const date = document.getElementById('overrideDate').value;
+      const mode = getSelectedOverrideMode();
+      const reason = document.getElementById('overrideReason').value.trim();
+
+      if (!date) {
+        alert('請選擇調整日期');
+        return;
+      }
+
+      let timeSlots = ['ALL'];
+      const isAvailable = (mode === 'day_open' || mode === 'slots_open') ? 1 : 0;
+
+      if (mode === 'slots_off' || mode === 'slots_open') {
+        timeSlots = Array.from(document.querySelectorAll('input[name="overrideSlotCb"]:checked')).map(cb => cb.value);
+        if (timeSlots.length === 0) {
+          alert('請至少勾選一個時段');
+          return;
+        }
+      }
+
+      try {
+        const res = await fetch('/api/admin/schedule-overrides', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            therapist_id: therapistId,
+            date,
+            time_slots: timeSlots,
+            is_available: isAvailable,
+            reason
+          })
+        });
+        const data = await res.json();
+        if (data.error) {
+          alert(data.error);
+          return;
+        }
+        document.getElementById('overrideReason').value = '';
+        document.querySelectorAll('input[name="overrideSlotCb"]').forEach(cb => { cb.checked = false; });
+        alert('排班異動已儲存！病患端可預約日期與時段已同步更新。');
+        loadScheduleConfig();
+      } catch (e) {
+        alert('儲存排班異動失敗');
+      }
+    }
+
+    async function deleteScheduleOverride(ovId) {
+      if (!confirm('確定要刪除此筆排班異動並恢復常態班表嗎？')) return;
+      try {
+        const res = await fetch(`/api/admin/schedule-overrides/${encodeURIComponent(ovId)}/delete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        const data = await res.json();
+        if (data.error) {
+          alert(data.error);
+          return;
+        }
+        loadScheduleConfig();
+      } catch (e) {
+        alert('刪除失敗');
+      }
+    }
+
+    function renderOverridesTable() {
+      const tbody = document.getElementById('overridesTableBody');
+      if (!tbody) return;
+      const list = scheduleConfig.overrides || [];
+      if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="px-3 py-8 text-center text-slate-400">目前尚無特定日期排班異動（全部依每週常態班表開放）</td></tr>';
+        return;
+      }
+
+      const weekdayNames = ['日', '一', '二', '三', '四', '五', '六'];
+      const targetNames = {
+        'all': '🏥 全所公休/統一',
+        'th_liu': '劉韋綸 院長',
+        'th_hong': '洪嘉良 物理治療師'
+      };
+
+      tbody.innerHTML = '';
+      list.forEach(ov => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50';
+
+        const parts = (ov.date || '').split('-');
+        let wdLabel = '';
+        if (parts.length === 3) {
+          const dObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+          wdLabel = ` (週${weekdayNames[dObj.getDay()]})`;
+        }
+
+        const tdDate = document.createElement('td');
+        tdDate.className = 'px-3 py-2.5 font-bold text-slate-900 whitespace-nowrap';
+        tdDate.textContent = `${ov.date}${wdLabel}`;
+
+        const tdTarget = document.createElement('td');
+        tdTarget.className = 'px-3 py-2.5 whitespace-nowrap font-medium text-slate-700';
+        tdTarget.textContent = targetNames[ov.therapist_id] || ov.therapist_id;
+
+        const tdSlot = document.createElement('td');
+        tdSlot.className = 'px-3 py-2.5 whitespace-nowrap';
+        const isWholeDay = !ov.time_slot || ov.time_slot === 'ALL';
+        const badge = document.createElement('span');
+        if (Number(ov.is_available) === 1) {
+          badge.className = 'px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold';
+          badge.textContent = isWholeDay ? '✅ 特別加開整日' : `✨ 加開 ${ov.time_slot}`;
+        } else {
+          badge.className = 'px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold';
+          badge.textContent = isWholeDay ? '🚫 整日休診/請假' : `⏰ 關閉 ${ov.time_slot}`;
+        }
+        tdSlot.appendChild(badge);
+
+        const tdReason = document.createElement('td');
+        tdReason.className = 'px-3 py-2.5 text-slate-500';
+        tdReason.textContent = ov.reason || '-';
+
+        const tdAction = document.createElement('td');
+        tdAction.className = 'px-3 py-2.5 text-right whitespace-nowrap';
+        const delBtn = document.createElement('button');
+        delBtn.className = 'px-2.5 py-1 border border-slate-200 hover:border-rose-300 hover:bg-rose-50 text-rose-600 rounded font-bold transition';
+        delBtn.textContent = '恢復預設';
+        delBtn.onclick = () => deleteScheduleOverride(ov.id);
+        tdAction.appendChild(delBtn);
+
+        tr.appendChild(tdDate);
+        tr.appendChild(tdTarget);
+        tr.appendChild(tdSlot);
+        tr.appendChild(tdReason);
+        tr.appendChild(tdAction);
+        tbody.appendChild(tr);
+      });
+    }
+
+    function selectWeeklyTherapist(tId) {
+      activeWeeklyTherapist = tId;
+      ['th_liu', 'th_hong'].forEach(id => {
+        const btn = document.getElementById(`weeklyTab-${id}`);
+        if (!btn) return;
+        if (id === tId) {
+          btn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-pine-700 text-white transition';
+        } else {
+          btn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition';
+        }
+      });
+      renderWeeklyScheduleGrid();
+    }
+
+    function renderWeeklyScheduleGrid() {
+      const grid = document.getElementById('weeklyScheduleGrid');
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      const dayLabels = [
+        { key: '0', label: '週一' },
+        { key: '1', label: '週二' },
+        { key: '2', label: '週三' },
+        { key: '3', label: '週四' },
+        { key: '4', label: '週五' },
+        { key: '5', label: '週六 (預設休)' },
+        { key: '6', label: '週日 (預設休)' }
+      ];
+
+      if (!scheduleConfig.weekly_schedules[activeWeeklyTherapist]) {
+        scheduleConfig.weekly_schedules[activeWeeklyTherapist] = {};
+      }
+      const tSched = scheduleConfig.weekly_schedules[activeWeeklyTherapist];
+      const allSlots = scheduleConfig.standard_slots || [];
+
+      dayLabels.forEach(day => {
+        if (!Array.isArray(tSched[day.key])) {
+          tSched[day.key] = (day.key === '5' || day.key === '6') ? [] : [...allSlots];
+        }
+        const enabledSet = new Set(tSched[day.key]);
+
+        const row = document.createElement('div');
+        row.className = 'flex flex-col md:flex-row md:items-center justify-between gap-2.5 p-3 rounded-xl border border-slate-200 bg-slate-50/50';
+
+        const left = document.createElement('div');
+        left.className = 'flex items-center justify-between md:w-44 flex-shrink-0';
+        const title = document.createElement('span');
+        title.className = `text-xs font-bold ${enabledSet.size === 0 ? 'text-rose-600' : 'text-slate-800'}`;
+        title.textContent = day.label;
+
+        const quickBtns = document.createElement('div');
+        quickBtns.className = 'flex items-center gap-1';
+        const btnAll = document.createElement('button');
+        btnAll.type = 'button';
+        btnAll.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-white border border-slate-200 hover:border-pine-500 text-pine-700';
+        btnAll.textContent = '全開';
+        btnAll.onclick = () => setWeeklyDayAll(day.key, true);
+
+        const btnNone = document.createElement('button');
+        btnNone.type = 'button';
+        btnNone.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-white border border-slate-200 hover:border-rose-400 text-rose-600';
+        btnNone.textContent = '全休';
+        btnNone.onclick = () => setWeeklyDayAll(day.key, false);
+
+        quickBtns.appendChild(btnAll);
+        quickBtns.appendChild(btnNone);
+        left.appendChild(title);
+        left.appendChild(quickBtns);
+
+        const right = document.createElement('div');
+        right.className = 'flex flex-wrap gap-1.5 flex-1';
+
+        allSlots.forEach(slot => {
+          const active = enabledSet.has(slot);
+          const pill = document.createElement('button');
+          pill.type = 'button';
+          pill.className = active
+            ? 'px-2.5 py-1 rounded-lg text-xs font-bold bg-pine-700 text-white border border-pine-800 shadow-xs transition'
+            : 'px-2.5 py-1 rounded-lg text-xs font-medium bg-white text-slate-400 border border-slate-200 line-through hover:border-slate-400 transition';
+          pill.textContent = active ? `✓ ${slot}` : slot;
+          pill.onclick = () => toggleWeeklySlot(day.key, slot);
+          right.appendChild(pill);
+        });
+
+        row.appendChild(left);
+        row.appendChild(right);
+        grid.appendChild(row);
+      });
+    }
+
+    function toggleWeeklySlot(dayKey, slot) {
+      const tSched = scheduleConfig.weekly_schedules[activeWeeklyTherapist];
+      const current = new Set(tSched[dayKey] || []);
+      if (current.has(slot)) {
+        current.delete(slot);
+      } else {
+        current.add(slot);
+      }
+      tSched[dayKey] = Array.from(current).sort();
+      renderWeeklyScheduleGrid();
+    }
+
+    function setWeeklyDayAll(dayKey, openAll) {
+      const tSched = scheduleConfig.weekly_schedules[activeWeeklyTherapist];
+      tSched[dayKey] = openAll ? [...(scheduleConfig.standard_slots || [])] : [];
+      renderWeeklyScheduleGrid();
+    }
+
+    async function saveWeeklySchedule() {
+      const schedule = scheduleConfig.weekly_schedules[activeWeeklyTherapist];
+      try {
+        const res = await fetch('/api/admin/weekly-schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            therapist_id: activeWeeklyTherapist,
+            schedule
+          })
+        });
+        const data = await res.json();
+        if (data.error) {
+          alert(data.error);
+          return;
+        }
+        alert('常態班表已儲存！病患端可預約時段已同步更新。');
+        loadScheduleConfig();
+      } catch (e) {
+        alert('儲存常態班表失敗');
+      }
+    }
+
+    function renderDefaultSlotsChips() {
+      const box = document.getElementById('defaultSlotsChips');
+      if (!box) return;
+      box.innerHTML = '';
+      (scheduleConfig.standard_slots || []).forEach(slot => {
+        const chip = document.createElement('span');
+        chip.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-300 text-xs font-bold text-slate-800';
+        const txt = document.createElement('span');
+        txt.textContent = slot;
+        const rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'text-slate-400 hover:text-rose-600 font-extrabold';
+        rm.textContent = '×';
+        rm.onclick = () => removeDefaultSlot(slot);
+        chip.appendChild(txt);
+        chip.appendChild(rm);
+        box.appendChild(chip);
+      });
+    }
+
+    function addDefaultSlot() {
+      const input = document.getElementById('newSlotInput');
+      const val = (input.value || '').trim();
+      if (!val) {
+        alert('請先選擇要加入的時間');
+        return;
+      }
+      if (!scheduleConfig.standard_slots.includes(val)) {
+        scheduleConfig.standard_slots.push(val);
+        scheduleConfig.standard_slots.sort();
+      }
+      input.value = '';
+      renderDefaultSlotsChips();
+    }
+
+    function removeDefaultSlot(slot) {
+      if (scheduleConfig.standard_slots.length <= 1) {
+        alert('至少須保留一個看診時段');
+        return;
+      }
+      scheduleConfig.standard_slots = scheduleConfig.standard_slots.filter(s => s !== slot);
+      renderDefaultSlotsChips();
+    }
+
+    async function saveDefaultSlots() {
+      try {
+        const res = await fetch('/api/admin/default-slots', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slots: scheduleConfig.standard_slots })
+        });
+        const data = await res.json();
+        if (data.error) {
+          alert(data.error);
+          return;
+        }
+        alert('全所標準時段已更新！');
+        loadScheduleConfig();
+      } catch (e) {
+        alert('儲存標準時段失敗');
       }
     }
   </script>

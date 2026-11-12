@@ -1,23 +1,162 @@
 import sqlite3
 import os
 import json
-import uuid
+import ssl
+import urllib.parse
 from datetime import datetime, timedelta
+
+try:
+    import pg8000.dbapi
+    HAS_PG8000 = True
+except ImportError:
+    HAS_PG8000 = False
 
 DB_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(DB_DIR, "data", "qingsong.db")
 
+DEFAULT_SLOTS = [
+    "09:00", "10:00", "11:00",
+    "15:00", "16:00", "17:00",
+    "19:00", "20:00"
+]
+
+_LAST_PG_ERROR = None
+
+
+class PGCursorWrapper:
+    """Wraps a pg8000 DB-API cursor to accept SQLite-style `?` placeholders and return dict rows."""
+
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def execute(self, sql, params=None):
+        stripped = sql.strip().upper()
+        if stripped == "BEGIN IMMEDIATE":
+            self._cursor.execute("LOCK TABLE appointments IN SHARE ROW EXCLUSIVE MODE")
+            return self
+
+        pg_sql = sql.replace("?", "%s")
+        if params is not None:
+            self._cursor.execute(pg_sql, tuple(params))
+        else:
+            self._cursor.execute(pg_sql)
+        return self
+
+    def fetchone(self):
+        if not self._cursor.description:
+            return None
+        row = self._cursor.fetchone()
+        if row is None:
+            return None
+        cols = [desc[0] for desc in self._cursor.description]
+        return dict(zip(cols, row))
+
+    def fetchall(self):
+        if not self._cursor.description:
+            return []
+        cols = [desc[0] for desc in self._cursor.description]
+        return [dict(zip(cols, row)) for row in self._cursor.fetchall()]
+
+    def close(self):
+        self._cursor.close()
+
+
+class PGConnectionWrapper:
+    """Wraps a pg8000 DB-API connection to match sqlite3 connection usage in server.py."""
+
+    def __init__(self, conn):
+        self._conn = conn
+        self.is_postgres = True
+
+    def cursor(self):
+        return PGCursorWrapper(self._conn.cursor())
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        self._conn.close()
+
+
+def _parse_pg_params(database_url):
+    parsed = urllib.parse.urlparse(database_url)
+    query = urllib.parse.parse_qs(parsed.query)
+    sslmode = query.get("sslmode", [""])[0].lower()
+    host = parsed.hostname or ""
+
+    kwargs = {
+        "user": urllib.parse.unquote(parsed.username or ""),
+        "password": urllib.parse.unquote(parsed.password or ""),
+        "host": host,
+        "port": parsed.port or 5432,
+        "database": parsed.path.lstrip("/"),
+        "timeout": 15,
+    }
+    if sslmode != "disable":
+        kwargs["ssl_context"] = ssl.create_default_context()
+    return kwargs
+
+
+def get_db_info():
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+    if database_url:
+        if not HAS_PG8000:
+            return {
+                "mode": "sqlite",
+                "persistent": False,
+                "label": "本機暫存 SQLite（缺少 pg8000 套件）",
+                "warning": "已設定 DATABASE_URL，但尚未安裝 pg8000 套件。請至 Render Settings 將 Build Command 改為 pip install -r requirements.txt 並重新部署。"
+            }
+        if _LAST_PG_ERROR:
+            return {
+                "mode": "sqlite",
+                "persistent": False,
+                "label": "本機暫存 SQLite（雲端連線失敗）",
+                "warning": f"DATABASE_URL 連線失敗，已暫時退回本機模式：{_LAST_PG_ERROR}"
+            }
+        return {
+            "mode": "postgresql",
+            "persistent": True,
+            "label": "Neon PostgreSQL 雲端資料庫（永久保存）",
+            "warning": None
+        }
+
+    is_render = bool(os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID"))
+    return {
+        "mode": "sqlite",
+        "persistent": False,
+        "label": "本機暫存 SQLite（重啟會清空）" if is_render else "本機 SQLite 資料庫",
+        "warning": "目前伺服器使用暫存硬碟，Render 休眠喚醒或更新部署時資料會歸零。請設定免費 Neon 雲端資料庫 (DATABASE_URL) 以永久保存所有預約！" if is_render else "本機測試模式：若部署至 Render 請務必設定 DATABASE_URL 環境變數以永久保存資料。"
+    }
+
+
 def get_connection():
+    global _LAST_PG_ERROR
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+    if database_url and HAS_PG8000:
+        try:
+            kwargs = _parse_pg_params(database_url)
+            pg_conn = pg8000.dbapi.connect(**kwargs)
+            _LAST_PG_ERROR = None
+            return PGConnectionWrapper(pg_conn)
+        except Exception as e:
+            _LAST_PG_ERROR = str(e)
+            print(f"⚠️ PostgreSQL 連線失敗，退回本機 SQLite: {e}")
+
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     return conn
 
+
 def init_db():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # 1. Therapists Table (Only specialties, no education)
+    # 1. Therapists Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS therapists (
         id TEXT PRIMARY KEY,
@@ -41,7 +180,7 @@ def init_db():
     );
     """)
 
-    # 3. Schedule Overrides / Off days
+    # 3. Schedule Overrides / Off days / Special openings
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS schedule_overrides (
         id TEXT PRIMARY KEY,
@@ -54,7 +193,7 @@ def init_db():
     );
     """)
 
-    # 4. Patients Table (Stores memory of basic info by line_user_id)
+    # 4. Patients Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS patients (
         line_user_id TEXT PRIMARY KEY,
@@ -102,18 +241,39 @@ def init_db():
     """)
 
     conn.commit()
-
-    # Re-seed Therapists (Only specialties, no education)
-    cursor.execute("DELETE FROM therapists")
     seed_data(cursor)
     conn.commit()
     conn.close()
 
+
+def get_default_weekly_schedule(slots=None):
+    base_slots = slots or list(DEFAULT_SLOTS)
+    return {
+        "0": list(base_slots),  # 週一
+        "1": list(base_slots),  # 週二
+        "2": list(base_slots),  # 週三
+        "3": list(base_slots),  # 週四
+        "4": list(base_slots),  # 週五
+        "5": [],                # 週六休診
+        "6": []                 # 週日休診
+    }
+
+
 def seed_data(cursor):
-    # Therapist 1: 劉韋綸 院長 (只留專長，去除學經歷)
+    # Therapist 1: 劉韋綸 院長
     cursor.execute("""
     INSERT INTO therapists (id, name, title, role_label, avatar, order_num, specialties, education, certifications, is_active)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        title = EXCLUDED.title,
+        role_label = EXCLUDED.role_label,
+        avatar = EXCLUDED.avatar,
+        order_num = EXCLUDED.order_num,
+        specialties = EXCLUDED.specialties,
+        education = EXCLUDED.education,
+        certifications = EXCLUDED.certifications,
+        is_active = EXCLUDED.is_active
     """, (
         "th_liu",
         "劉韋綸",
@@ -128,15 +288,25 @@ def seed_data(cursor):
             "肌筋膜疼痛問題處理",
             "運動傷害防護與修復"
         ], ensure_ascii=False),
-        json.dumps([], ensure_ascii=False),  # 去除學經歷
+        json.dumps([], ensure_ascii=False),
         json.dumps([], ensure_ascii=False),
         1
     ))
 
-    # Therapist 2: 洪嘉良 物理治療師 (只留專長，去除學經歷)
+    # Therapist 2: 洪嘉良 物理治療師
     cursor.execute("""
     INSERT INTO therapists (id, name, title, role_label, avatar, order_num, specialties, education, certifications, is_active)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        title = EXCLUDED.title,
+        role_label = EXCLUDED.role_label,
+        avatar = EXCLUDED.avatar,
+        order_num = EXCLUDED.order_num,
+        specialties = EXCLUDED.specialties,
+        education = EXCLUDED.education,
+        certifications = EXCLUDED.certifications,
+        is_active = EXCLUDED.is_active
     """, (
         "th_hong",
         "洪嘉良",
@@ -152,143 +322,35 @@ def seed_data(cursor):
             "姿勢矯正與維持",
             "銀髮族肌力與平衡訓練"
         ], ensure_ascii=False),
-        json.dumps([], ensure_ascii=False),  # 去除學經歷
+        json.dumps([], ensure_ascii=False),
         json.dumps([], ensure_ascii=False),
         1
     ))
 
-    # Default clinic settings (Fixed 8 slots: 09:00, 10:00, 11:00, 15:00, 16:00, 17:00, 19:00, 20:00)
+    # Default clinic settings (ON CONFLICT DO NOTHING so admin edits persist!)
+    default_weekly = {
+        "th_liu": get_default_weekly_schedule(DEFAULT_SLOTS),
+        "th_hong": get_default_weekly_schedule(DEFAULT_SLOTS)
+    }
     settings = {
         "clinic_name": "青松物理治療所",
         "clinic_phone": "07-7353353",
         "clinic_address": "高雄市鳥松區華美路69號",
-        "clinic_line_id": "@126cxeyj",
-        "liff_id": "2012064889-uSjEJVic",
+        "clinic_line_id": "@557fabgw",
+        "liff_id": "2012458374-x8h6v4Dh",
         "booking_window_days": "30",
         "cancel_lead_hours": "24",
         "reminder_lead_hours": "24",
-        "default_slots": json.dumps([
-            "09:00", "10:00", "11:00",
-            "15:00", "16:00", "17:00",
-            "19:00", "20:00"
-        ])
+        "default_slots": json.dumps(DEFAULT_SLOTS),
+        "weekly_schedules": json.dumps(default_weekly, ensure_ascii=False)
     }
     for k, v in settings.items():
-        cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (k, v))
-
-    # Sample Appointments on upcoming Weekdays (Mon-Fri)
-    # Find next Monday
-    now = datetime.now()
-    days_ahead = (0 - now.weekday() + 7) % 7
-    if days_ahead == 0:
-        days_ahead = 7
-    next_monday = now + timedelta(days=days_ahead)
-    next_tuesday = next_monday + timedelta(days=1)
-    next_wednesday = next_monday + timedelta(days=2)
-
-    sample_appointments = [
-        (
-            "APT" + next_monday.strftime("%Y%m%d") + "001",
-            "U_DEMO_001",
-            "陳雅婷",
-            "0912-345-678",
-            "1992-05-18",
-            "th_liu",
-            "劉韋綸",
-            "FIRST_VISIT",
-            1,
-            next_monday.strftime("%Y-%m-%d"),
-            "10:00",
-            "CONFIRMED",
-            "肩頸長期痠痛、右手舉起卡卡",
-            (now - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S"),
-            (now - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S"),
-            None,
-            None,
-            (now - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S")
-        ),
-        (
-            "APT" + next_monday.strftime("%Y%m%d") + "002",
-            "U_DEMO_002",
-            "林建宏",
-            "0928-112-233",
-            "1985-11-04",
-            "th_hong",
-            "洪嘉良",
-            "FOLLOW_UP",
-            0,
-            next_monday.strftime("%Y-%m-%d"),
-            "15:00",
-            "PENDING_CONFIRM",
-            "右膝前十字韌帶術後第二個月訓練",
-            (now - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S"),
-            None,
-            None,
-            None,
-            (now - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S")
-        ),
-        (
-            "APT" + next_tuesday.strftime("%Y%m%d") + "003",
-            "U_DEMO_003",
-            "張淑芬",
-            "0933-789-012",
-            "1968-08-22",
-            "th_hong",
-            "洪嘉良",
-            "FITNESS",
-            0,
-            next_tuesday.strftime("%Y-%m-%d"),
-            "11:00",
-            "RESERVED",
-            "銀髮族肌力訓練與核心維持",
-            None,
-            None,
-            None,
-            None,
-            (now - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
-        ),
-        (
-            "APT" + next_wednesday.strftime("%Y%m%d") + "004",
-            "U_DEMO_004",
-            "黃冠宇",
-            "0987-654-321",
-            "1998-03-15",
-            "th_liu",
-            "劉韋綸",
-            "FIRST_VISIT",
-            1,
-            next_wednesday.strftime("%Y-%m-%d"),
-            "19:00",
-            "RESERVED",
-            "打羽球腰部拉傷",
-            None,
-            None,
-            None,
-            None,
-            now.strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO NOTHING",
+            (k, v)
         )
-    ]
 
-    for apt in sample_appointments:
-        cursor.execute("""
-        INSERT OR REPLACE INTO appointments (
-            id, line_user_id, patient_name, patient_phone, patient_birthday,
-            therapist_id, therapist_name, visit_type, has_referral_slip,
-            appointment_date, appointment_time, status, patient_note,
-            reminder_sent_at, confirmed_at, cancelled_at, cancel_reason, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, apt)
-
-    # Seed Patient memory
-    cursor.execute("""
-    INSERT OR REPLACE INTO patients (line_user_id, name, phone, birthday, updated_at)
-    VALUES (?, ?, ?, ?, ?)
-    """, ("U_DEMO_001", "陳雅婷", "0912-345-678", "1992-05-18", now.strftime("%Y-%m-%d %H:%M:%S")))
-    cursor.execute("""
-    INSERT OR REPLACE INTO patients (line_user_id, name, phone, birthday, updated_at)
-    VALUES (?, ?, ?, ?, ?)
-    """, ("U_DEMO_002", "林建宏", "0928-112-233", "1985-11-04", now.strftime("%Y-%m-%d %H:%M:%S")))
 
 if __name__ == "__main__":
     init_db()
-    print("Database re-initialized with updated slots and therapist specs.")
+    print("Database initialized:", get_db_info())

@@ -12,14 +12,31 @@ import io
 from datetime import datetime, timedelta
 import database
 
-PORT = 8080
+PORT = int(os.environ.get("PORT", 8080))
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PUBLIC_DIR = os.path.join(BASE_DIR, "public")
 DEFAULT_LINE_TOKEN = "yp6wkNJuQGfj9VJJwTWxAsZF9+uzK96hfuioq5jxJ8k0uSBhBGsrN8iiNOujlptTeWBbBe0xqDhmVXYbwTVDeo0NFFqQMe23nIvMMMg+UHc7khN6AchbB43a1rsaqTzQEi4S19/7ZGismZ/suDGUrwdB04t89/1O/w1cDnyilFU="
 
+
+def taiwan_now():
+    return datetime.utcnow() + timedelta(hours=8)
+
+
+class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
+
 class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=PUBLIC_DIR, **kwargs)
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -41,12 +58,16 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.api_get_patient(query)
         elif path == "/api/slots":
             self.api_get_slots(query)
+        elif path == "/api/schedule-summary":
+            self.api_get_schedule_summary(query)
         elif path == "/api/appointments":
             self.api_get_appointments(query)
         elif path == "/api/admin/appointments":
             self.api_admin_get_appointments(query)
         elif path == "/api/admin/stats":
             self.api_admin_get_stats()
+        elif path == "/api/admin/schedule-config":
+            self.api_admin_get_schedule_config()
         elif path == "/api/admin/export":
             self.api_admin_export_csv(query)
         elif path == "/api/reminders/check-and-send":
@@ -71,10 +92,28 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         elif path.startswith("/api/admin/appointments/") and path.endswith("/status"):
             apt_id = path.split("/")[4]
             self.api_admin_update_status(apt_id, body)
+        elif path == "/api/admin/schedule-overrides":
+            self.api_admin_create_schedule_override(body)
+        elif path.startswith("/api/admin/schedule-overrides/") and path.endswith("/delete"):
+            ov_id = path.split("/")[4]
+            self.api_admin_delete_schedule_override(ov_id)
+        elif path == "/api/admin/weekly-schedule":
+            self.api_admin_update_weekly_schedule(body)
+        elif path == "/api/admin/default-slots":
+            self.api_admin_update_default_slots(body)
         elif path == "/api/reminders/check-and-send":
             self.api_trigger_reminders(body)
         elif path == "/api/line/webhook":
             self.api_line_webhook(body)
+        else:
+            self.send_json({"error": "Endpoint not found"}, status=404)
+
+    def do_DELETE(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        if path.startswith("/api/admin/schedule-overrides/"):
+            ov_id = path.split("/")[4]
+            self.api_admin_delete_schedule_override(ov_id)
         else:
             self.send_json({"error": "Endpoint not found"}, status=404)
 
@@ -233,6 +272,172 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         else:
             self.send_json({"found": False})
 
+    def get_clinic_schedule_config(self, cursor):
+        cursor.execute("SELECT key, value FROM settings WHERE key IN ('default_slots', 'weekly_schedules')")
+        settings_map = {r["key"]: r["value"] for r in cursor.fetchall()}
+
+        standard_slots = list(database.DEFAULT_SLOTS)
+        if "default_slots" in settings_map:
+            try:
+                parsed_slots = json.loads(settings_map["default_slots"])
+                if isinstance(parsed_slots, list) and parsed_slots:
+                    standard_slots = sorted(list({str(s).strip() for s in parsed_slots if str(s).strip()}))
+            except Exception:
+                pass
+
+        weekly_schedules = {}
+        if "weekly_schedules" in settings_map:
+            try:
+                parsed_weekly = json.loads(settings_map["weekly_schedules"])
+                if isinstance(parsed_weekly, dict):
+                    weekly_schedules = parsed_weekly
+            except Exception:
+                pass
+
+        cursor.execute("SELECT id, name, title FROM therapists WHERE is_active = 1 ORDER BY order_num ASC")
+        active_therapists = cursor.fetchall()
+        return standard_slots, weekly_schedules, active_therapists
+
+    def compute_therapist_open_slots(self, therapist_id, date_obj, standard_slots, weekly_schedules, overrides_for_date):
+        weekday = date_obj.weekday()
+        weekday_str = str(weekday)
+        t_weekly = weekly_schedules.get(therapist_id)
+        if isinstance(t_weekly, dict) and weekday_str in t_weekly:
+            open_slots = set(t_weekly.get(weekday_str) or [])
+        else:
+            open_slots = set() if weekday in (5, 6) else set(standard_slots)
+
+        if weekday in (5, 6) and not open_slots:
+            closed_reason = "週六、週日為固定休診日（僅週一至週五開放預約）"
+        elif not open_slots:
+            closed_reason = "該治療師本日固定休診"
+        else:
+            closed_reason = ""
+
+        # Apply overrides in order: clinic day -> therapist day -> clinic slot -> therapist slot
+        def is_full_day(ov):
+            ts = (ov["time_slot"] or "").strip()
+            return ts == "" or ts.upper() == "ALL"
+
+        for ov in overrides_for_date:
+            if ov["therapist_id"] == "all" and is_full_day(ov):
+                if int(ov["is_available"]) == 0:
+                    open_slots.clear()
+                    closed_reason = (ov["reason"] or "").strip() or "青松物理治療所本日公休"
+                else:
+                    open_slots = set(standard_slots)
+                    closed_reason = ""
+
+        for ov in overrides_for_date:
+            if ov["therapist_id"] == therapist_id and is_full_day(ov):
+                if int(ov["is_available"]) == 0:
+                    open_slots.clear()
+                    closed_reason = (ov["reason"] or "").strip() or "該治療師本日請假／休診"
+                else:
+                    open_slots = set(standard_slots)
+                    closed_reason = ""
+
+        for ov in overrides_for_date:
+            ts = (ov["time_slot"] or "").strip()
+            if ov["therapist_id"] == "all" and ts and ts.upper() != "ALL":
+                if int(ov["is_available"]) == 0:
+                    open_slots.discard(ts)
+                    if not open_slots and not closed_reason:
+                        closed_reason = (ov["reason"] or "").strip() or "本日無開放時段"
+                else:
+                    open_slots.add(ts)
+
+        for ov in overrides_for_date:
+            ts = (ov["time_slot"] or "").strip()
+            if ov["therapist_id"] == therapist_id and ts and ts.upper() != "ALL":
+                if int(ov["is_available"]) == 0:
+                    open_slots.discard(ts)
+                    if not open_slots and not closed_reason:
+                        closed_reason = (ov["reason"] or "").strip() or "該治療師本日無開放時段"
+                else:
+                    open_slots.add(ts)
+
+        return sorted(open_slots), closed_reason
+
+    def api_get_schedule_summary(self, query):
+        therapist_id = query.get("therapist_id", ["any"])[0]
+        try:
+            days = int(query.get("days", ["30"])[0])
+        except ValueError:
+            days = 30
+        days = max(1, min(days, 60))
+
+        now_tw = taiwan_now()
+        start_date = now_tw.strftime("%Y-%m-%d")
+        end_date = (now_tw + timedelta(days=days - 1)).strftime("%Y-%m-%d")
+
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        standard_slots, weekly_schedules, active_therapists = self.get_clinic_schedule_config(cursor)
+
+        cursor.execute("""
+            SELECT therapist_id, date, time_slot, is_available, reason
+            FROM schedule_overrides
+            WHERE date >= ? AND date <= ?
+        """, (start_date, end_date))
+        ov_by_date = {}
+        for r in cursor.fetchall():
+            ov_by_date.setdefault(r["date"], []).append(r)
+
+        cursor.execute("""
+            SELECT appointment_date, appointment_time, therapist_id
+            FROM appointments
+            WHERE appointment_date >= ? AND appointment_date <= ? AND status != 'CANCELLED'
+        """, (start_date, end_date))
+        booked_by_date = {}
+        for r in cursor.fetchall():
+            booked_by_date.setdefault(r["appointment_date"], set()).add((r["therapist_id"], r["appointment_time"]))
+
+        conn.close()
+
+        summary_days = []
+        for i in range(days):
+            d_obj = now_tw + timedelta(days=i)
+            d_str = d_obj.strftime("%Y-%m-%d")
+            day_ovs = ov_by_date.get(d_str, [])
+            day_booked = booked_by_date.get(d_str, set())
+
+            if therapist_id and therapist_id != "any":
+                open_slots, closed_reason = self.compute_therapist_open_slots(
+                    therapist_id, d_obj, standard_slots, weekly_schedules, day_ovs
+                )
+                remaining = [s for s in open_slots if (therapist_id, s) not in day_booked]
+                summary_days.append({
+                    "date": d_str,
+                    "is_closed": len(open_slots) == 0,
+                    "reason": closed_reason if len(open_slots) == 0 else "",
+                    "open_count": len(open_slots),
+                    "available_count": len(remaining)
+                })
+            else:
+                union_open = set()
+                union_avail = set()
+                reasons = []
+                for t in active_therapists:
+                    t_open, t_reason = self.compute_therapist_open_slots(
+                        t["id"], d_obj, standard_slots, weekly_schedules, day_ovs
+                    )
+                    union_open.update(t_open)
+                    for s in t_open:
+                        if (t["id"], s) not in day_booked:
+                            union_avail.add(s)
+                    if not t_open and t_reason:
+                        reasons.append(t_reason)
+                summary_days.append({
+                    "date": d_str,
+                    "is_closed": len(union_open) == 0,
+                    "reason": reasons[0] if (len(union_open) == 0 and reasons) else "",
+                    "open_count": len(union_open),
+                    "available_count": len(union_avail)
+                })
+
+        self.send_json({"therapist_id": therapist_id, "days": summary_days})
+
     def api_get_slots(self, query):
         target_date = query.get("date", [""])[0]
         therapist_id = query.get("therapist_id", ["any"])[0]
@@ -241,66 +446,87 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "Date parameter is required"}, status=400)
             return
 
-        # Parse date and check weekday (Saturday=5, Sunday=6 are closed)
         try:
             date_obj = datetime.strptime(target_date, "%Y-%m-%d")
         except ValueError:
             self.send_json({"error": "Invalid date format"}, status=400)
             return
 
-        if date_obj.weekday() in (5, 6):  # Saturday and Sunday closed
-            self.send_json({
-                "date": target_date,
-                "is_closed": True,
-                "reason": "週六、週日為固定休診日（僅週一至週五開放預約）",
-                "slots": []
-            })
-            return
-
         conn = database.get_connection()
         cursor = conn.cursor()
 
-        # Get all active therapists
-        cursor.execute("SELECT id, name FROM therapists WHERE is_active = 1")
-        all_therapists = cursor.fetchall()
-        total_therapist_count = len(all_therapists)
+        standard_slots, weekly_schedules, all_therapists = self.get_clinic_schedule_config(cursor)
 
-        # Standard slots (8 slots: 09:00, 10:00, 11:00, 15:00, 16:00, 17:00, 19:00, 20:00)
-        standard_slots = [
-            "09:00", "10:00", "11:00",
-            "15:00", "16:00", "17:00",
-            "19:00", "20:00"
-        ]
+        cursor.execute("""
+            SELECT therapist_id, date, time_slot, is_available, reason
+            FROM schedule_overrides
+            WHERE date = ?
+        """, (target_date,))
+        overrides_for_date = cursor.fetchall()
 
-        # Query booked appointments for that date (status not CANCELLED)
+        cursor.execute("""
+            SELECT appointment_time, therapist_id
+            FROM appointments
+            WHERE appointment_date = ? AND status != 'CANCELLED'
+        """, (target_date,))
+        booked_pairs = {(r["therapist_id"], r["appointment_time"]) for r in cursor.fetchall()}
+
         if therapist_id and therapist_id != "any":
-            # 指定特定治療師：只要該治療師被預約就算額滿
-            cursor.execute("""
-                SELECT appointment_time 
-                FROM appointments 
-                WHERE appointment_date = ? AND therapist_id = ? AND status != 'CANCELLED'
-            """, (target_date, therapist_id))
-            booked_times = {row["appointment_time"] for row in cursor.fetchall()}
-        else:
-            # 不指定治療師：若所有治療師皆被約滿才算額滿（或只要有空檔即可）
-            cursor.execute("""
-                SELECT appointment_time, COUNT(DISTINCT therapist_id) as count 
-                FROM appointments 
-                WHERE appointment_date = ? AND status != 'CANCELLED'
-                GROUP BY appointment_time
-            """, (target_date,))
-            booked_rows = cursor.fetchall()
-            booked_times = {row["appointment_time"] for row in booked_rows if row["count"] >= total_therapist_count}
+            open_slots, closed_reason = self.compute_therapist_open_slots(
+                therapist_id, date_obj, standard_slots, weekly_schedules, overrides_for_date
+            )
+            if not open_slots:
+                conn.close()
+                self.send_json({
+                    "date": target_date,
+                    "is_closed": True,
+                    "reason": closed_reason or "本日休診",
+                    "slots": []
+                })
+                return
 
-        # Build response slots
-        slots_result = []
-        for slot in standard_slots:
-            is_available = slot not in booked_times
-            slots_result.append({
-                "time": slot,
-                "available": is_available,
-                "remaining_capacity": 0 if not is_available else 1
-            })
+            slots_result = []
+            for slot in open_slots:
+                is_available = (therapist_id, slot) not in booked_pairs
+                slots_result.append({
+                    "time": slot,
+                    "available": is_available,
+                    "remaining_capacity": 1 if is_available else 0
+                })
+        else:
+            therapist_open_map = {}
+            all_open = set()
+            reasons = []
+            for t in all_therapists:
+                t_open, t_reason = self.compute_therapist_open_slots(
+                    t["id"], date_obj, standard_slots, weekly_schedules, overrides_for_date
+                )
+                therapist_open_map[t["id"]] = set(t_open)
+                all_open.update(t_open)
+                if not t_open and t_reason:
+                    reasons.append(t_reason)
+
+            if not all_open:
+                conn.close()
+                self.send_json({
+                    "date": target_date,
+                    "is_closed": True,
+                    "reason": reasons[0] if reasons else "本日休診",
+                    "slots": []
+                })
+                return
+
+            slots_result = []
+            for slot in sorted(all_open):
+                free_count = sum(
+                    1 for t in all_therapists
+                    if slot in therapist_open_map[t["id"]] and (t["id"], slot) not in booked_pairs
+                )
+                slots_result.append({
+                    "time": slot,
+                    "available": free_count > 0,
+                    "remaining_capacity": free_count
+                })
 
         conn.close()
         self.send_json({
@@ -321,9 +547,16 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         appointment_date = body.get("appointment_date", "").strip()
         appointment_time = body.get("appointment_time", "").strip()
         patient_note = body.get("patient_note", "").strip()
+        admin_override = bool(body.get("admin_override"))
 
         if not patient_name or not patient_phone or not appointment_date or not appointment_time:
             self.send_json({"error": "請完整填寫姓名、電話、預約日期與時段"}, status=400)
+            return
+
+        try:
+            date_obj = datetime.strptime(appointment_date, "%Y-%m-%d")
+        except ValueError:
+            self.send_json({"error": "看診日期格式錯誤"}, status=400)
             return
 
         # 法規硬性檢查：初診必須有照會單方可看診
@@ -338,13 +571,27 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             # Conflict prevention inside transaction
             cursor.execute("BEGIN IMMEDIATE")
 
-            # Resolve therapist if "any"
-            cursor.execute("SELECT id, name FROM therapists WHERE is_active = 1 ORDER BY order_num ASC")
-            all_therapists = cursor.fetchall()
+            standard_slots, weekly_schedules, all_therapists = self.get_clinic_schedule_config(cursor)
+            cursor.execute("""
+                SELECT therapist_id, date, time_slot, is_available, reason
+                FROM schedule_overrides
+                WHERE date = ?
+            """, (appointment_date,))
+            overrides_for_date = cursor.fetchall()
+
             assigned_therapist_id = None
             assigned_therapist_name = None
 
             if therapist_id != "any":
+                if not admin_override:
+                    open_slots, closed_reason = self.compute_therapist_open_slots(
+                        therapist_id, date_obj, standard_slots, weekly_schedules, overrides_for_date
+                    )
+                    if appointment_time not in open_slots:
+                        conn.rollback()
+                        self.send_json({"error": f"很抱歉，該時段目前未開放預約（{closed_reason or '休診或排班調整'}）"}, status=409)
+                        return
+
                 # Check if chosen therapist is booked
                 cursor.execute("""
                     SELECT id FROM appointments 
@@ -360,25 +607,33 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
                         assigned_therapist_name = t["name"]
                         break
             else:
-                # 不指定治療師：自動指派該時段空閒的治療師
+                # 不指定治療師：自動指派該時段排班中且空閒的治療師
                 cursor.execute("""
                     SELECT therapist_id FROM appointments 
                     WHERE appointment_date = ? AND appointment_time = ? AND status != 'CANCELLED'
                 """, (appointment_date, appointment_time))
                 busy_ids = {r["therapist_id"] for r in cursor.fetchall()}
                 for t in all_therapists:
-                    if t["id"] not in busy_ids:
-                        assigned_therapist_id = t["id"]
-                        assigned_therapist_name = t["name"]
-                        break
+                    if t["id"] in busy_ids:
+                        continue
+                    if not admin_override:
+                        open_slots, _ = self.compute_therapist_open_slots(
+                            t["id"], date_obj, standard_slots, weekly_schedules, overrides_for_date
+                        )
+                        if appointment_time not in open_slots:
+                            continue
+                    assigned_therapist_id = t["id"]
+                    assigned_therapist_name = t["name"]
+                    break
 
                 if not assigned_therapist_id:
                     conn.rollback()
-                    self.send_json({"error": "很抱歉，該時段所有治療師已全數額滿，請選擇其他時段"}, status=409)
+                    self.send_json({"error": "很抱歉，該時段所有治療師已全數額滿或未開診，請選擇其他時段"}, status=409)
                     return
 
-            apt_id = "APT" + datetime.now().strftime("%Y%m%d%H%M%S") + uuid.uuid4().hex[:4].upper()
-            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            now_tw = taiwan_now()
+            apt_id = "APT" + now_tw.strftime("%Y%m%d%H%M%S") + uuid.uuid4().hex[:4].upper()
+            now_str = now_tw.strftime("%Y-%m-%d %H:%M:%S")
 
             cursor.execute("""
                 INSERT INTO appointments (
@@ -395,8 +650,13 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             # Remember patient details
             cursor.execute("""
-                INSERT OR REPLACE INTO patients (line_user_id, name, phone, birthday, updated_at)
+                INSERT INTO patients (line_user_id, name, phone, birthday, updated_at)
                 VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (line_user_id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    phone = EXCLUDED.phone,
+                    birthday = EXCLUDED.birthday,
+                    updated_at = EXCLUDED.updated_at
             """, (line_user_id, patient_name, patient_phone, patient_birthday, now_str))
 
             conn.commit()
@@ -451,7 +711,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "找不到此筆預約"}, status=404)
             return
 
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now_str = taiwan_now().strftime("%Y-%m-%d %H:%M:%S")
         reason = body.get("reason", "病患主動線上取消")
 
         cursor.execute("""
@@ -471,7 +731,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
     def api_confirm_appointment(self, apt_id, body):
         conn = database.get_connection()
         cursor = conn.cursor()
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now_str = taiwan_now().strftime("%Y-%m-%d %H:%M:%S")
         cursor.execute("""
             UPDATE appointments 
             SET status = 'CONFIRMED', confirmed_at = ? 
@@ -515,8 +775,9 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
     def api_admin_get_stats(self):
         conn = database.get_connection()
         cursor = conn.cursor()
-        today = datetime.now().strftime("%Y-%m-%d")
-        tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+        now_tw = taiwan_now()
+        today = now_tw.strftime("%Y-%m-%d")
+        tomorrow = (now_tw + timedelta(days=1)).strftime("%Y-%m-%d")
 
         cursor.execute("SELECT COUNT(*) as total FROM appointments WHERE status != 'CANCELLED'")
         total = cursor.fetchone()["total"]
@@ -539,7 +800,8 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             "today_count": today_count,
             "tomorrow_pending": tomorrow_pending,
             "confirmed_count": confirmed,
-            "cancelled_count": cancelled
+            "cancelled_count": cancelled,
+            "db_info": database.get_db_info()
         })
 
     def api_admin_update_status(self, apt_id, body):
@@ -552,7 +814,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         conn = database.get_connection()
         cursor = conn.cursor()
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now_str = taiwan_now().strftime("%Y-%m-%d %H:%M:%S")
 
         if new_status == "CONFIRMED":
             cursor.execute("UPDATE appointments SET status = ?, confirmed_at = ? WHERE id = ?", (new_status, now_str, apt_id))
@@ -567,6 +829,156 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         conn.commit()
         conn.close()
         self.send_json({"success": True, "updated_id": apt_id, "status": new_status})
+
+    # --- Admin Schedule Management Handlers ---
+    def api_admin_get_schedule_config(self):
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        standard_slots, weekly_schedules, therapists = self.get_clinic_schedule_config(cursor)
+
+        # Ensure every active therapist has an initialized weekly map
+        for t in therapists:
+            if t["id"] not in weekly_schedules:
+                weekly_schedules[t["id"]] = database.get_default_weekly_schedule(standard_slots)
+
+        cursor.execute("""
+            SELECT id, therapist_id, date, time_slot, is_available, reason, created_at
+            FROM schedule_overrides
+            ORDER BY date ASC, time_slot ASC
+        """)
+        overrides = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+
+        self.send_json({
+            "standard_slots": standard_slots,
+            "weekly_schedules": weekly_schedules,
+            "therapists": [dict(t) for t in therapists],
+            "overrides": overrides
+        })
+
+    def api_admin_create_schedule_override(self, body):
+        therapist_id = (body.get("therapist_id") or "").strip()
+        target_date = (body.get("date") or "").strip()
+        time_slots = body.get("time_slots")
+        if time_slots is None:
+            single_slot = (body.get("time_slot") or "ALL").strip()
+            time_slots = [single_slot]
+        is_available = 1 if int(body.get("is_available", 0)) == 1 else 0
+        reason = (body.get("reason") or "").strip()
+
+        if therapist_id not in ("all", "th_liu", "th_hong"):
+            self.send_json({"error": "無效的治療師對象"}, status=400)
+            return
+        try:
+            datetime.strptime(target_date, "%Y-%m-%d")
+        except ValueError:
+            self.send_json({"error": "日期格式錯誤，請選擇有效日期"}, status=400)
+            return
+        if not isinstance(time_slots, list) or len(time_slots) == 0:
+            self.send_json({"error": "請選擇要調整的時段或整日"}, status=400)
+            return
+
+        now_str = taiwan_now().strftime("%Y-%m-%d %H:%M:%S")
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        created_ids = []
+
+        try:
+            for ts in time_slots:
+                slot_val = str(ts).strip() or "ALL"
+                cursor.execute("""
+                    DELETE FROM schedule_overrides
+                    WHERE therapist_id = ? AND date = ? AND time_slot = ?
+                """, (therapist_id, target_date, slot_val))
+
+                ov_id = "OV" + taiwan_now().strftime("%Y%m%d%H%M%S") + uuid.uuid4().hex[:4].upper()
+                cursor.execute("""
+                    INSERT INTO schedule_overrides (id, therapist_id, date, time_slot, is_available, reason, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (ov_id, therapist_id, target_date, slot_val, is_available, reason, now_str))
+                created_ids.append(ov_id)
+
+            conn.commit()
+            self.send_json({"success": True, "created_ids": created_ids})
+        except Exception as e:
+            conn.rollback()
+            self.send_json({"error": f"儲存排班異動失敗: {str(e)}"}, status=500)
+        finally:
+            conn.close()
+
+    def api_admin_delete_schedule_override(self, ov_id):
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM schedule_overrides WHERE id = ?", (ov_id,))
+        conn.commit()
+        conn.close()
+        self.send_json({"success": True, "deleted_id": ov_id})
+
+    def api_admin_update_weekly_schedule(self, body):
+        therapist_id = (body.get("therapist_id") or "").strip()
+        schedule = body.get("schedule")
+
+        if therapist_id not in ("th_liu", "th_hong") or not isinstance(schedule, dict):
+            self.send_json({"error": "無效的治療師或班表資料"}, status=400)
+            return
+
+        cleaned_schedule = {}
+        for day_idx in range(7):
+            k = str(day_idx)
+            day_slots = schedule.get(k, [])
+            if not isinstance(day_slots, list):
+                day_slots = []
+            cleaned_schedule[k] = sorted(list({str(s).strip() for s in day_slots if str(s).strip()}))
+
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        try:
+            standard_slots, weekly_schedules, _ = self.get_clinic_schedule_config(cursor)
+            weekly_schedules[therapist_id] = cleaned_schedule
+            cursor.execute("""
+                INSERT INTO settings (key, value) VALUES (?, ?)
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+            """, ("weekly_schedules", json.dumps(weekly_schedules, ensure_ascii=False)))
+            conn.commit()
+            self.send_json({"success": True, "therapist_id": therapist_id, "schedule": cleaned_schedule})
+        except Exception as e:
+            conn.rollback()
+            self.send_json({"error": f"更新常態班表失敗: {str(e)}"}, status=500)
+        finally:
+            conn.close()
+
+    def api_admin_update_default_slots(self, body):
+        slots = body.get("slots")
+        if not isinstance(slots, list) or len(slots) == 0:
+            self.send_json({"error": "至少須保留一個門診時段"}, status=400)
+            return
+
+        cleaned = []
+        for s in slots:
+            s_str = str(s).strip()
+            try:
+                datetime.strptime(s_str, "%H:%M")
+                if s_str not in cleaned:
+                    cleaned.append(s_str)
+            except ValueError:
+                self.send_json({"error": f"時段格式錯誤: {s_str}（請使用 HH:MM 例如 14:00）"}, status=400)
+                return
+
+        cleaned.sort()
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO settings (key, value) VALUES (?, ?)
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+            """, ("default_slots", json.dumps(cleaned)))
+            conn.commit()
+            self.send_json({"success": True, "standard_slots": cleaned})
+        except Exception as e:
+            conn.rollback()
+            self.send_json({"error": f"更新標準時段失敗: {str(e)}"}, status=500)
+        finally:
+            conn.close()
 
     def api_admin_export_csv(self, query):
         conn = database.get_connection()
@@ -607,7 +1019,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         csv_bytes = output.getvalue().encode("utf-8-sig")  # utf-8-sig for Excel compatibility
         self.send_response(200)
         self.send_header("Content-Type", "text/csv; charset=utf-8")
-        self.send_header("Content-Disposition", f"attachment; filename=qingsong_appointments_{datetime.now().strftime('%Y%m%d')}.csv")
+        self.send_header("Content-Disposition", f"attachment; filename=qingsong_appointments_{taiwan_now().strftime('%Y%m%d')}.csv")
         self.send_header("Content-Length", str(len(csv_bytes)))
         self.end_headers()
         self.wfile.write(csv_bytes)
@@ -678,9 +1090,9 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         cursor = conn.cursor()
         
         # Calculate Taiwan Time (UTC+8)
-        taiwan_now = datetime.utcnow() + timedelta(hours=8)
-        tomorrow_date = (taiwan_now + timedelta(days=1)).strftime("%Y-%m-%d")
-        today_date = taiwan_now.strftime("%Y-%m-%d")
+        now_tw = taiwan_now()
+        tomorrow_date = (now_tw + timedelta(days=1)).strftime("%Y-%m-%d")
+        today_date = now_tw.strftime("%Y-%m-%d")
 
         cursor.execute("""
             SELECT * FROM appointments 
@@ -689,11 +1101,11 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
                 appointment_date = ? 
                 OR (appointment_date = ? AND appointment_time >= ?)
               )
-        """, (tomorrow_date, today_date, taiwan_now.strftime("%H:%M")))
+        """, (tomorrow_date, today_date, now_tw.strftime("%H:%M")))
 
         eligible = cursor.fetchall()
         processed = []
-        now_str = taiwan_now.strftime("%Y-%m-%d %H:%M:%S")
+        now_str = now_tw.strftime("%Y-%m-%d %H:%M:%S")
 
         for apt in eligible:
             flex_card = self.generate_flex_confirmation(apt)
@@ -748,7 +1160,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
                 parsed_data = urllib.parse.parse_qs(postback_data)
                 action = parsed_data.get("action", [""])[0]
                 apt_id = parsed_data.get("apt_id", [""])[0]
-                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                now_str = taiwan_now().strftime("%Y-%m-%d %H:%M:%S")
 
                 if action == "confirm" and apt_id:
                     cursor.execute("UPDATE appointments SET status = 'CONFIRMED', confirmed_at = ? WHERE id = ?", (now_str, apt_id))
@@ -872,10 +1284,11 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     database.init_db()
-    with socketserver.TCPServer(("", PORT), QingsongRequestHandler) as httpd:
+    with ThreadingHTTPServer(("", PORT), QingsongRequestHandler) as httpd:
         print(f"🌲 青松物理治療所預約系統伺服器已啟動: http://localhost:{PORT}")
         print(f"📱 病患端 LINE LIFF 體驗: http://localhost:{PORT}/")
         print(f"🖥 診所端管理後台: http://localhost:{PORT}/admin")
+        print(f"💾 資料庫模式: {database.get_db_info()['label']}")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
