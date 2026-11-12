@@ -343,7 +343,7 @@
                 <label class="block text-sm md:text-base font-bold text-slate-900 flex items-center gap-2">
                   <i data-lucide="clock" class="w-5 h-5 text-pine-700"></i> 選擇預約時間
                 </label>
-                <p class="text-xs text-slate-400 mt-0.5">每時段專屬物理治療師施作，額滿自動鎖定</p>
+                <p class="text-xs text-slate-400 mt-0.5" id="bookingRulesHint">每時段專屬物理治療師施作，額滿與已過時段自動隱藏</p>
               </div>
               <span class="text-xs text-pine-700 font-bold bg-pine-50 border border-pine-200 px-2 py-1 rounded-lg">週一至週五看診</span>
             </div>
@@ -553,7 +553,7 @@
             </div>
           </div>
 
-          <div class="flex space-x-3 pt-2">
+            <div class="flex space-x-3 pt-2">
             <button onclick="switchTab('mybookings')" class="flex-1 py-3.5 bg-pine-700 hover:bg-pine-800 text-white font-bold rounded-xl text-xs md:text-sm transition">
               前往「我的預約」查看
             </button>
@@ -561,6 +561,21 @@
               再次預約
             </button>
           </div>
+        </div>
+
+        <!-- LINE 破冰打招呼與諮詢卡片 -->
+        <div class="max-w-2xl mx-auto bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div class="flex items-start gap-2.5 text-xs text-slate-700">
+            <i data-lucide="message-circle" class="w-4 h-4 text-[#06C755] flex-shrink-0 mt-0.5"></i>
+            <div>
+              <div class="font-bold text-slate-900">有看診疑問、當日急約或找不到合適時段嗎？</div>
+              <p class="text-slate-500 mt-0.5">點一下即可直接在 LINE 官方帳號聊天室跟治療所打聲招呼，方便治療師為您回覆！</p>
+            </div>
+          </div>
+          <button type="button" onclick="sayHelloToClinic()" class="flex-shrink-0 px-4 py-2 bg-[#06C755] hover:bg-[#05b34c] text-white font-bold rounded-xl text-xs shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+            <span>跟診所打聲招呼</span>
+          </button>
         </div>
 
       </section>
@@ -873,6 +888,9 @@
                 <div>
                   <span class="font-bold text-slate-800">官方 LINE：</span>
                   <p class="text-slate-600 mt-0.5">@557fabgw</p>
+                  <button type="button" onclick="sayHelloToClinic()" class="text-[#06C755] font-bold hover:underline inline-flex items-center gap-1 mt-1 text-xs cursor-pointer">
+                    跟診所打聲招呼 / LINE 線上諮詢 <i data-lucide="send" class="w-3 h-3"></i>
+                  </button>
                 </div>
               </div>
             </div>
@@ -1063,6 +1081,22 @@ function loginWithLine() {
     }
   }
   window.location.href = 'https://liff.line.me/2012458374-x8h6v4Dh';
+}
+
+async function sayHelloToClinic() {
+  const greetingText = '您好！我想諮詢青松物理治療所的預約與看診事宜 😊';
+  const oaUrl = 'https://line.me/R/oaMessage/@557fabgw/?' + encodeURIComponent(greetingText);
+
+  if (window.liff && liff.isInClient()) {
+    try {
+      await liff.sendMessages([{ type: 'text', text: greetingText }]);
+      alert('✅ 已在 LINE 聊天室幫您跟青松物理治療所打聲招呼囉！\n治療師／櫃檯看到後就能直接回覆您。');
+      return;
+    } catch (e) {
+      // If chat_message.write is not enabled, open OA chat directly with pre-filled greeting
+    }
+  }
+  window.open(oaUrl, '_blank');
 }
 
 function updateUserUI() {
@@ -1553,6 +1587,21 @@ async function generateDateList() {
         });
         scheduleSummaryTimestamp = Date.now();
       }
+      if (data.booking_rules) {
+        const hintEl = document.getElementById('bookingRulesHint');
+        if (hintEl) {
+          const parts = [];
+          if (data.booking_rules.min_advance_hours > 0) {
+            parts.push(`最晚需提前 ${data.booking_rules.min_advance_hours} 小時預約`);
+          }
+          if (data.booking_rules.max_active_bookings > 0) {
+            parts.push(`每人同時最多保留 ${data.booking_rules.max_active_bookings} 筆預約`);
+          }
+          hintEl.textContent = parts.length > 0
+            ? `${parts.join(' · ')}（額滿與已過時段自動隱藏）`
+            : '每時段專屬物理治療師施作，額滿自動隱藏';
+        }
+      }
     }
   } catch (e) {
     // Fallback to default Mon-Fri if offline
@@ -1578,13 +1627,16 @@ async function generateDateList() {
 
     const info = summaryMap[dateStr];
     const isClosed = info ? Boolean(info.is_closed) : (dayOfWeek === 0 || dayOfWeek === 6);
-    const isFull = info ? (!info.is_closed && info.available_count === 0) : false;
+    const isPastCutoff = info ? Boolean(info.is_past_cutoff) : false;
+    const isFull = info ? (!info.is_closed && !isPastCutoff && info.available_count === 0) : false;
+    const isDisabled = isClosed || isPastCutoff;
 
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.id = `date-btn-${dateStr}`;
     btn.dataset.date = dateStr;
     btn.dataset.isWeekend = isClosed ? 'true' : 'false';
+    btn.dataset.isPastCutoff = isPastCutoff ? 'true' : 'false';
     btn.dataset.isFull = isFull ? 'true' : 'false';
 
     let badgeClass = 'text-emerald-700 bg-emerald-50';
@@ -1592,24 +1644,27 @@ async function generateDateList() {
     if (isClosed) {
       badgeClass = 'text-rose-500 bg-rose-50';
       badgeText = '休診';
+    } else if (isPastCutoff) {
+      badgeClass = 'text-slate-500 bg-slate-100';
+      badgeText = '已過';
     } else if (isFull) {
       badgeClass = 'text-amber-700 bg-amber-50';
       badgeText = '額滿';
     }
 
     btn.className = `flex-shrink-0 w-16 py-3 px-1 rounded-2xl border-2 text-center transition flex flex-col items-center justify-center ${
-      isClosed
+      isDisabled
         ? 'border-slate-200 bg-slate-50 text-slate-400 opacity-60 cursor-not-allowed'
         : 'border-slate-200 bg-white hover:border-pine-600 hover:bg-pine-50 text-slate-800 cursor-pointer'
     }`;
 
     btn.innerHTML = `
-      <span class="text-xs font-bold ${isClosed ? 'text-slate-400' : 'text-slate-500'}">週${weekdays[dayOfWeek]}</span>
-      <span class="text-sm md:text-base font-extrabold my-0.5 ${isClosed ? 'text-slate-400' : 'text-slate-900'}">${d.getMonth() + 1}/${d.getDate()}</span>
+      <span class="text-xs font-bold ${isDisabled ? 'text-slate-400' : 'text-slate-500'}">週${weekdays[dayOfWeek]}</span>
+      <span class="text-sm md:text-base font-extrabold my-0.5 ${isDisabled ? 'text-slate-400' : 'text-slate-900'}">${d.getMonth() + 1}/${d.getDate()}</span>
       <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${badgeClass}">${badgeText}</span>
     `;
 
-    if (!isClosed) {
+    if (!isDisabled) {
       btn.onclick = () => selectDate(dateStr, false);
       if (!firstAvailableWeekday && !isFull) {
         firstAvailableWeekday = dateStr;
@@ -1622,7 +1677,9 @@ async function generateDateList() {
   }
 
   if (!firstAvailableWeekday) {
-    const firstNonClosed = Array.from(container.querySelectorAll('button')).find(b => b.dataset.isWeekend !== 'true');
+    const firstNonClosed = Array.from(container.querySelectorAll('button')).find(
+      b => b.dataset.isWeekend !== 'true' && b.dataset.isPastCutoff !== 'true'
+    );
     if (firstNonClosed) firstAvailableWeekday = firstNonClosed.dataset.date;
   }
 
@@ -1643,7 +1700,9 @@ function selectDate(dateStr, isWeekend) {
   // Refresh all date buttons styling
   document.querySelectorAll('#datePickerList button').forEach(b => {
     const bClosed = (b.dataset.isWeekend === 'true');
+    const bPast = (b.dataset.isPastCutoff === 'true');
     const bFull = (b.dataset.isFull === 'true');
+    const bDisabled = bClosed || bPast;
     if (b.dataset.date === dateStr) {
       b.className = 'flex-shrink-0 w-16 py-3 px-1 rounded-2xl border-2 border-pine-700 bg-pine-700 text-white shadow-md transition flex flex-col items-center justify-center cursor-pointer';
       const parts = b.dataset.date.split('-');
@@ -1660,12 +1719,15 @@ function selectDate(dateStr, isWeekend) {
       if (bClosed) {
         badgeClass = 'text-rose-500 bg-rose-50';
         badgeText = '休診';
+      } else if (bPast) {
+        badgeClass = 'text-slate-500 bg-slate-100';
+        badgeText = '已過';
       } else if (bFull) {
         badgeClass = 'text-amber-700 bg-amber-50';
         badgeText = '額滿';
       }
       b.className = `flex-shrink-0 w-16 py-3 px-1 rounded-2xl border-2 text-center transition flex flex-col items-center justify-center ${
-        bClosed
+        bDisabled
           ? 'border-slate-200 bg-slate-50 text-slate-400 opacity-60 cursor-not-allowed'
           : 'border-slate-200 bg-white hover:border-pine-600 hover:bg-pine-50 text-slate-800 cursor-pointer'
       }`;
@@ -1673,8 +1735,8 @@ function selectDate(dateStr, isWeekend) {
       const dObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
       const wds = ['日', '一', '二', '三', '四', '五', '六'];
       b.innerHTML = `
-        <span class="text-xs font-bold ${bClosed ? 'text-slate-400' : 'text-slate-500'}">週${wds[dObj.getDay()]}</span>
-        <span class="text-sm md:text-base font-extrabold my-0.5 ${bClosed ? 'text-slate-400' : 'text-slate-900'}">${dObj.getMonth() + 1}/${dObj.getDate()}</span>
+        <span class="text-xs font-bold ${bDisabled ? 'text-slate-400' : 'text-slate-500'}">週${wds[dObj.getDay()]}</span>
+        <span class="text-sm md:text-base font-extrabold my-0.5 ${bDisabled ? 'text-slate-400' : 'text-slate-900'}">${dObj.getMonth() + 1}/${dObj.getDate()}</span>
         <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${badgeClass}">${badgeText}</span>
       `;
     }

@@ -9,6 +9,7 @@ import sqlite3
 import uuid
 import csv
 import io
+import re
 import threading
 import time
 from datetime import datetime, timedelta
@@ -59,6 +60,12 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.serve_file(os.path.join(PUBLIC_DIR, "index.html"), "text/html")
         elif path == "/admin" or path == "/admin.html":
             self.serve_file(os.path.join(PUBLIC_DIR, "admin.html"), "text/html")
+        elif path == "/api/health":
+            self.send_json({
+                "status": "ok",
+                "service": "qingsong-booking",
+                "time": taiwan_now().strftime("%Y-%m-%d %H:%M:%S")
+            })
         elif path == "/api/therapists":
             self.api_get_therapists()
         elif path == "/api/services":
@@ -112,6 +119,8 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.api_admin_update_weekly_schedule(body)
         elif path == "/api/admin/default-slots":
             self.api_admin_update_default_slots(body)
+        elif path == "/api/admin/booking-rules":
+            self.api_admin_update_booking_rules(body)
         elif path == "/api/reminders/check-and-send":
             self.api_trigger_reminders(body)
         elif path == "/api/line/webhook":
@@ -284,7 +293,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"found": False})
 
     def get_clinic_schedule_config(self, cursor):
-        cursor.execute("SELECT key, value FROM settings WHERE key IN ('default_slots', 'weekly_schedules')")
+        cursor.execute("SELECT key, value FROM settings WHERE key IN ('default_slots', 'weekly_schedules', 'min_advance_hours', 'max_active_bookings')")
         settings_map = {r["key"]: r["value"] for r in cursor.fetchall()}
 
         standard_slots = list(database.DEFAULT_SLOTS)
@@ -308,6 +317,45 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         cursor.execute("SELECT id, name, title FROM therapists WHERE is_active = 1 ORDER BY order_num ASC")
         active_therapists = cursor.fetchall()
         return standard_slots, weekly_schedules, active_therapists
+
+    def get_booking_rules(self, cursor):
+        cursor.execute("SELECT key, value FROM settings WHERE key IN ('min_advance_hours', 'max_active_bookings')")
+        settings_map = {r["key"]: r["value"] for r in cursor.fetchall()}
+        try:
+            min_advance = max(0, int(settings_map.get("min_advance_hours", "1")))
+        except ValueError:
+            min_advance = 1
+        try:
+            max_active = max(0, int(settings_map.get("max_active_bookings", "2")))
+        except ValueError:
+            max_active = 2
+        return {"min_advance_hours": min_advance, "max_active_bookings": max_active}
+
+    def apply_advance_cutoff(self, date_str, raw_slots, min_advance_hours, now_tw=None):
+        now_tw = now_tw or taiwan_now()
+        cutoff_dt = now_tw + timedelta(hours=min_advance_hours)
+        filtered = []
+        avail_count = 0
+        for s in raw_slots:
+            slot_time = s["time"]
+            is_avail = bool(s["available"])
+            too_late = False
+            try:
+                slot_dt = datetime.strptime(f"{date_str} {slot_time}", "%Y-%m-%d %H:%M")
+                if slot_dt < cutoff_dt:
+                    is_avail = False
+                    too_late = True
+            except ValueError:
+                pass
+            if is_avail:
+                avail_count += 1
+            filtered.append({
+                "time": slot_time,
+                "available": is_avail,
+                "remaining_capacity": s["remaining_capacity"] if is_avail else 0,
+                "too_late": too_late
+            })
+        return filtered, avail_count
 
     def compute_therapist_open_slots(self, therapist_id, date_obj, standard_slots, weekly_schedules, overrides_for_date):
         weekday = date_obj.weekday()
@@ -386,12 +434,26 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         with _CACHE_LOCK:
             cached = _SCHEDULE_CACHE.get(cache_key)
             if cached and (time.monotonic() - cached["ts"]) < _CACHE_TTL_SECONDS:
-                self.send_json(cached["payload"])
+                rules = cached["booking_rules"]
+                dynamic_days = []
+                for item in cached["days"]:
+                    f_slots, avail_cnt = self.apply_advance_cutoff(item["date"], item["slots"], rules["min_advance_hours"], now_tw)
+                    dynamic_days.append({
+                        "date": item["date"],
+                        "is_closed": item["is_closed"],
+                        "reason": item["reason"],
+                        "open_count": item["open_count"],
+                        "available_count": avail_cnt,
+                        "is_past_cutoff": (not item["is_closed"]) and item["open_count"] > 0 and avail_cnt == 0 and all(s.get("too_late") or not s["available"] for s in f_slots) and any(s.get("too_late") for s in f_slots),
+                        "slots": f_slots
+                    })
+                self.send_json({"therapist_id": therapist_id, "booking_rules": rules, "days": dynamic_days})
                 return
 
         conn = database.get_connection()
         cursor = conn.cursor()
         standard_slots, weekly_schedules, active_therapists = self.get_clinic_schedule_config(cursor)
+        booking_rules = self.get_booking_rules(cursor)
 
         cursor.execute("""
             SELECT therapist_id, date, time_slot, is_available, reason
@@ -475,12 +537,12 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "slots": day_slots
                 })
 
-        payload = {"therapist_id": therapist_id, "days": summary_days}
         with _CACHE_LOCK:
-            _SCHEDULE_CACHE[cache_key] = {"ts": time.monotonic(), "payload": payload}
+            _SCHEDULE_CACHE[cache_key] = {"ts": time.monotonic(), "booking_rules": booking_rules, "days": summary_days}
             for item in summary_days:
                 _SCHEDULE_CACHE[("slots", therapist_id, item["date"])] = {
                     "ts": time.monotonic(),
+                    "booking_rules": booking_rules,
                     "payload": {
                         "date": item["date"],
                         "is_closed": item["is_closed"],
@@ -489,7 +551,20 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
                         "slots": item["slots"]
                     }
                 }
-        self.send_json(payload)
+
+        dynamic_days = []
+        for item in summary_days:
+            f_slots, avail_cnt = self.apply_advance_cutoff(item["date"], item["slots"], booking_rules["min_advance_hours"], now_tw)
+            dynamic_days.append({
+                "date": item["date"],
+                "is_closed": item["is_closed"],
+                "reason": item["reason"],
+                "open_count": item["open_count"],
+                "available_count": avail_cnt,
+                "is_past_cutoff": (not item["is_closed"]) and item["open_count"] > 0 and avail_cnt == 0 and any(s.get("too_late") for s in f_slots),
+                "slots": f_slots
+            })
+        self.send_json({"therapist_id": therapist_id, "booking_rules": booking_rules, "days": dynamic_days})
 
     def api_get_slots(self, query):
         target_date = query.get("date", [""])[0]
@@ -505,17 +580,25 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "Invalid date format"}, status=400)
             return
 
+        now_tw = taiwan_now()
         cache_key = ("slots", therapist_id, target_date)
         with _CACHE_LOCK:
             cached = _SCHEDULE_CACHE.get(cache_key)
             if cached and (time.monotonic() - cached["ts"]) < _CACHE_TTL_SECONDS:
-                self.send_json(cached["payload"])
+                base_payload = cached["payload"]
+                rules = cached.get("booking_rules", {"min_advance_hours": 1, "max_active_bookings": 2})
+                f_slots, _ = self.apply_advance_cutoff(target_date, base_payload["slots"], rules["min_advance_hours"], now_tw)
+                resp_payload = dict(base_payload)
+                resp_payload["slots"] = f_slots
+                resp_payload["booking_rules"] = rules
+                self.send_json(resp_payload)
                 return
 
         conn = database.get_connection()
         cursor = conn.cursor()
 
         standard_slots, weekly_schedules, all_therapists = self.get_clinic_schedule_config(cursor)
+        booking_rules = self.get_booking_rules(cursor)
 
         cursor.execute("""
             SELECT therapist_id, date, time_slot, is_available, reason
@@ -596,8 +679,12 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             "slots": slots_result
         }
         with _CACHE_LOCK:
-            _SCHEDULE_CACHE[cache_key] = {"ts": time.monotonic(), "payload": payload}
-        self.send_json(payload)
+            _SCHEDULE_CACHE[cache_key] = {"ts": time.monotonic(), "booking_rules": booking_rules, "payload": payload}
+        f_slots, _ = self.apply_advance_cutoff(target_date, slots_result, booking_rules["min_advance_hours"], now_tw)
+        resp_payload = dict(payload)
+        resp_payload["slots"] = f_slots
+        resp_payload["booking_rules"] = booking_rules
+        self.send_json(resp_payload)
 
     def api_create_appointment(self, body):
         line_user_id = body.get("line_user_id", "").strip() or f"U_GUEST_{uuid.uuid4().hex[:8]}"
@@ -618,8 +705,9 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             date_obj = datetime.strptime(appointment_date, "%Y-%m-%d")
+            slot_dt = datetime.strptime(f"{appointment_date} {appointment_time}", "%Y-%m-%d %H:%M")
         except ValueError:
-            self.send_json({"error": "看診日期格式錯誤"}, status=400)
+            self.send_json({"error": "看診日期或時段格式錯誤"}, status=400)
             return
 
         # 法規硬性檢查：初診必須有照會單方可看診
@@ -635,6 +723,44 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             cursor.execute("BEGIN IMMEDIATE")
 
             standard_slots, weekly_schedules, all_therapists = self.get_clinic_schedule_config(cursor)
+            booking_rules = self.get_booking_rules(cursor)
+            now_tw = taiwan_now()
+
+            if not admin_override:
+                min_adv = booking_rules["min_advance_hours"]
+                if slot_dt < now_tw + timedelta(hours=min_adv):
+                    conn.rollback()
+                    if min_adv > 0:
+                        self.send_json({"error": f"本診所線上預約最晚須於看診前 {min_adv} 小時完成（當日臨時需求請致電 07-7353353）"}, status=400)
+                    else:
+                        self.send_json({"error": "該時段看診時間已過，請選擇其他時段"}, status=400)
+                    return
+
+                max_active = booking_rules["max_active_bookings"]
+                if max_active > 0:
+                    today_str = now_tw.strftime("%Y-%m-%d")
+                    norm_phone = re.sub(r"\D", "", patient_phone)
+                    cursor.execute("""
+                        SELECT id, line_user_id, patient_phone, appointment_date, appointment_time
+                        FROM appointments
+                        WHERE appointment_date >= ? AND status != 'CANCELLED'
+                    """, (today_str,))
+                    upcoming_rows = cursor.fetchall()
+                    user_active_count = 0
+                    for r in upcoming_rows:
+                        r_dt_str = f"{r['appointment_date']} {r['appointment_time']}"
+                        if r_dt_str < now_tw.strftime("%Y-%m-%d %H:%M"):
+                            continue
+                        same_line = (not line_user_id.startswith("U_GUEST_")) and (r["line_user_id"] == line_user_id)
+                        same_phone = norm_phone and (re.sub(r"\D", "", r["patient_phone"] or "") == norm_phone)
+                        if same_line or same_phone:
+                            user_active_count += 1
+                    if user_active_count >= max_active:
+                        conn.rollback()
+                        self.send_json({
+                            "error": f"為維護病友預約權益，每位病患同時最多保留 {max_active} 筆尚未看診之預約。您目前已有 {user_active_count} 筆有效預約，請於看診完成或先至「我的預約」取消舊預約後再進行掛號。"
+                        }, status=409)
+                        return
             cursor.execute("""
                 SELECT therapist_id, date, time_slot, is_available, reason
                 FROM schedule_overrides
@@ -903,6 +1029,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         conn = database.get_connection()
         cursor = conn.cursor()
         standard_slots, weekly_schedules, therapists = self.get_clinic_schedule_config(cursor)
+        booking_rules = self.get_booking_rules(cursor)
 
         # Ensure every active therapist has an initialized weekly map
         for t in therapists:
@@ -921,7 +1048,8 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             "standard_slots": standard_slots,
             "weekly_schedules": weekly_schedules,
             "therapists": [dict(t) for t in therapists],
-            "overrides": overrides
+            "overrides": overrides,
+            "booking_rules": booking_rules
         })
 
     def api_admin_create_schedule_override(self, body):
@@ -1049,6 +1177,41 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             conn.rollback()
             self.send_json({"error": f"更新標準時段失敗: {str(e)}"}, status=500)
+        finally:
+            conn.close()
+
+    def api_admin_update_booking_rules(self, body):
+        try:
+            min_adv = int(body.get("min_advance_hours", 1))
+            max_active = int(body.get("max_active_bookings", 2))
+        except (TypeError, ValueError):
+            self.send_json({"error": "規則數值格式錯誤"}, status=400)
+            return
+
+        if min_adv < 0 or min_adv > 72:
+            self.send_json({"error": "提前預約時數需介於 0 至 72 小時之間"}, status=400)
+            return
+        if max_active < 0 or max_active > 20:
+            self.send_json({"error": "最多同時預約筆數需介於 0 至 20 筆之間（0 代表不限制）"}, status=400)
+            return
+
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        try:
+            for k, v in [("min_advance_hours", str(min_adv)), ("max_active_bookings", str(max_active))]:
+                cursor.execute("""
+                    INSERT INTO settings (key, value) VALUES (?, ?)
+                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+                """, (k, v))
+            conn.commit()
+            invalidate_schedule_cache()
+            self.send_json({
+                "success": True,
+                "booking_rules": {"min_advance_hours": min_adv, "max_active_bookings": max_active}
+            })
+        except Exception as e:
+            conn.rollback()
+            self.send_json({"error": f"更新預約規則失敗: {str(e)}"}, status=500)
         finally:
             conn.close()
 

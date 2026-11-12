@@ -341,6 +341,8 @@ def seed_data(cursor):
         "booking_window_days": "30",
         "cancel_lead_hours": "24",
         "reminder_lead_hours": "24",
+        "min_advance_hours": "1",
+        "max_active_bookings": "2",
         "default_slots": json.dumps(DEFAULT_SLOTS),
         "weekly_schedules": json.dumps(default_weekly, ensure_ascii=False)
     }

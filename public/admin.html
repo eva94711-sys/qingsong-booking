@@ -444,6 +444,51 @@
         </div>
       </div>
 
+      <!-- 區塊四：線上預約防佔位與提前限制設定 -->
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
+        <div>
+          <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <i data-lucide="shield-check" class="w-4 h-4 text-pine-700"></i>
+            <span>線上預約防佔位與提前限制規則</span>
+          </h3>
+          <p class="text-xs text-slate-500 mt-0.5">保護診所避免臨時急約措手不及，或單一病患一次約滿過多時段佔位（櫃檯手動新增掛號不受此限制）。</p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+          <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+            <label class="block font-bold text-slate-800">最晚須提前幾小時線上預約</label>
+            <p class="text-[11px] text-slate-500">已過時間或低於此提前時數的當日時段會自動隱藏。</p>
+            <select id="ruleMinAdvanceHours" class="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-pine-600 focus:outline-none font-bold text-slate-800">
+              <option value="0">0 小時（只要時段還沒到就能約）</option>
+              <option value="1">1 小時前（預設推薦）</option>
+              <option value="2">2 小時前</option>
+              <option value="4">4 小時前</option>
+              <option value="12">12 小時前</option>
+              <option value="24">24 小時前（至少提前一天）</option>
+            </select>
+          </div>
+
+          <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+            <label class="block font-bold text-slate-800">每人最多同時保留幾筆預約</label>
+            <p class="text-[11px] text-slate-500">依手機號碼／LINE 帳號計算尚未看診之有效預約上限。</p>
+            <select id="ruleMaxActiveBookings" class="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-pine-600 focus:outline-none font-bold text-slate-800">
+              <option value="1">最多同時保留 1 筆</option>
+              <option value="2">最多同時保留 2 筆（預設推薦）</option>
+              <option value="3">最多同時保留 3 筆</option>
+              <option value="5">最多同時保留 5 筆</option>
+              <option value="0">不限制筆數</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex justify-end">
+          <button onclick="saveBookingRules()" class="px-5 py-2 bg-pine-700 hover:bg-pine-800 text-white text-xs font-bold rounded-lg shadow-xs transition flex items-center gap-1.5">
+            <i data-lucide="save" class="w-4 h-4"></i>
+            <span>儲存預約限制規則</span>
+          </button>
+        </div>
+      </div>
+
     </div>
 
   </main>
@@ -810,6 +855,7 @@
             therapist_id: therapistId,
             visit_type: visitType,
             has_referral_slip: true,
+            admin_override: true,
             patient_note: note || '櫃檯現場/電話手動掛號'
           })
         });
@@ -848,8 +894,39 @@
         renderOverridesTable();
         renderWeeklyScheduleGrid();
         renderDefaultSlotsChips();
+
+        if (data.booking_rules) {
+          const minSel = document.getElementById('ruleMinAdvanceHours');
+          const maxSel = document.getElementById('ruleMaxActiveBookings');
+          if (minSel) minSel.value = String(data.booking_rules.min_advance_hours ?? 1);
+          if (maxSel) maxSel.value = String(data.booking_rules.max_active_bookings ?? 2);
+        }
       } catch (e) {
         console.error('載入排班設定失敗', e);
+      }
+    }
+
+    async function saveBookingRules() {
+      const minAdv = parseInt(document.getElementById('ruleMinAdvanceHours').value, 10);
+      const maxActive = parseInt(document.getElementById('ruleMaxActiveBookings').value, 10);
+      try {
+        const res = await fetch('/api/admin/booking-rules', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            min_advance_hours: isNaN(minAdv) ? 1 : minAdv,
+            max_active_bookings: isNaN(maxActive) ? 2 : maxActive
+          })
+        });
+        const data = await res.json();
+        if (data.error) {
+          alert(data.error);
+          return;
+        }
+        alert('預約防呆限制規則已更新！');
+        loadScheduleConfig();
+      } catch (e) {
+        alert('儲存預約規則失敗');
       }
     }
 
