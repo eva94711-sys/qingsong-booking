@@ -21,6 +21,10 @@ import database
 PORT = int(os.environ.get("PORT", 8080))
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PUBLIC_DIR = os.path.join(BASE_DIR, "public")
+ADMIN_PATH = os.environ.get("ADMIN_PATH", "/qs-internal-69").strip()
+if not ADMIN_PATH.startswith("/"):
+    ADMIN_PATH = "/" + ADMIN_PATH
+ADMIN_PATH = ADMIN_PATH.rstrip("/")
 DEFAULT_LINE_TOKEN = "yp6wkNJuQGfj9VJJwTWxAsZF9+uzK96hfuioq5jxJ8k0uSBhBGsrN8iiNOujlptTeWBbBe0xqDhmVXYbwTVDeo0NFFqQMe23nIvMMMg+UHc7khN6AchbB43a1rsaqTzQEi4S19/7ZGismZ/suDGUrwdB04t89/1O/w1cDnyilFU="
 
 _CACHE_LOCK = threading.Lock()
@@ -181,7 +185,16 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         path = parsed.path
         query = urllib.parse.parse_qs(parsed.query)
 
-        # Protect all admin API routes
+        # Honeypot: trap scanners looking for standard admin paths or probes
+        if (
+            path in ("/admin", "/admin.html", "/wp-admin", "/administrator", "/login.php")
+            or (path.endswith("admin.html") and path != f"{ADMIN_PATH}.html")
+        ):
+            record_failed_login(self.get_client_ip())
+            self.send_error(404, "File not found")
+            return
+
+        # Protect all admin API routes (returns 404 to pretend endpoints don't exist if unauthenticated)
         if path.startswith("/api/admin/"):
             if not self.require_admin_auth(query):
                 return
@@ -189,7 +202,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         # Route matching
         if path == "/" or path == "/index.html":
             self.serve_file(os.path.join(PUBLIC_DIR, "index.html"), "text/html")
-        elif path == "/admin" or path == "/admin.html":
+        elif path == ADMIN_PATH or path == f"{ADMIN_PATH}.html":
             self.serve_file(os.path.join(PUBLIC_DIR, "admin.html"), "text/html")
         elif path == "/api/health":
             self.send_json({
@@ -323,9 +336,9 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
     def require_admin_auth(self, query=None):
         if not self.is_admin_authenticated(query):
             self.send_json({
-                "error": "未授權存取：請先登入後台管理系統",
-                "code": "UNAUTHORIZED"
-            }, status=401)
+                "error": "Endpoint not found",
+                "code": "NOT_FOUND"
+            }, status=404)
             return False
         return True
 
@@ -382,7 +395,16 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         update_admin_password(new_password)
         self.send_json({"success": True, "message": "管理密碼已成功更新！下次登入請使用新密碼。"})
 
-    # --- Helper methods ---
+    # --- Security & Helper methods ---
+    def send_security_headers(self):
+        # 醫療級安全標頭：僅允許 LINE LIFF 與自身嵌入，全面阻擋跨站點擊劫持與偷窺
+        self.send_header("Content-Security-Policy", "frame-ancestors 'self' https://liff.line.me https://*.line.me;")
+        self.send_header("X-Frame-Options", "SAMEORIGIN")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-XSS-Protection", "1; mode=block")
+        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+
     def read_json_body(self):
         content_length = int(self.headers.get("Content-Length", 0))
         if content_length > 0:
@@ -399,6 +421,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(response_bytes)))
         self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_security_headers()
         if cookie:
             self.send_header("Set-Cookie", cookie)
         self.end_headers()
@@ -413,6 +436,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", f"{content_type}; charset=utf-8")
         self.send_header("Content-Length", str(len(content)))
+        self.send_security_headers()
         # 停用快取，強制瀏覽器每次都取最新檔案
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.send_header("Pragma", "no-cache")
@@ -518,8 +542,8 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_json(settings)
 
     def api_get_patient(self, query):
-        line_user_id = query.get("line_user_id", [""])[0]
-        if not line_user_id:
+        line_user_id = query.get("line_user_id", [""])[0].strip()
+        if not line_user_id or line_user_id.startswith("U_GUEST_") or not line_user_id.startswith("U"):
             self.send_json({"found": False})
             return
         conn = database.get_connection()
@@ -1125,15 +1149,17 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             conn.close()
 
     def api_get_appointments(self, query):
-        line_user_id = query.get("line_user_id", [""])[0]
-        if not line_user_id:
+        line_user_id = query.get("line_user_id", [""])[0].strip()
+        if not line_user_id or line_user_id.startswith("U_GUEST_") or not line_user_id.startswith("U"):
             self.send_json([])
             return
 
         conn = database.get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT * FROM appointments 
+            SELECT id, appointment_date, appointment_time, therapist_name, 
+                   visit_type, status, patient_name, created_at
+            FROM appointments 
             WHERE line_user_id = ? 
             ORDER BY appointment_date DESC, appointment_time DESC
         """, (line_user_id,))
@@ -1505,6 +1531,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "text/csv; charset=utf-8")
         self.send_header("Content-Disposition", f"attachment; filename=qingsong_appointments_{taiwan_now().strftime('%Y%m%d')}.csv")
         self.send_header("Content-Length", str(len(csv_bytes)))
+        self.send_security_headers()
         self.end_headers()
         self.wfile.write(csv_bytes)
 

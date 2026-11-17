@@ -724,7 +724,7 @@
       options.credentials = 'same-origin';
 
       const res = await fetch(url, options);
-      if (res.status === 401) {
+      if (res.status === 401 || res.status === 404) {
         clearAdminToken();
         showLoginScreen('登入憑證已過期或失效，請重新輸入密碼。');
         throw new Error('UNAUTHORIZED');
