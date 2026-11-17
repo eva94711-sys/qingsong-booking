@@ -417,6 +417,17 @@
 
         <!-- STEP 3: 病患基本資料 -->
         <div id="bookingStep3" class="hidden space-y-4 max-w-2xl mx-auto">
+          <!-- 智慧記憶上次病患資料提示橫幅 -->
+          <div id="patientMemoryBanner" class="hidden p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-2 text-xs shadow-xs">
+            <div class="flex items-center gap-2 text-emerald-900">
+              <i data-lucide="sparkles" class="w-4 h-4 text-emerald-600 flex-shrink-0"></i>
+              <span id="patientMemoryBannerText">已自動帶入您上次的預約資料</span>
+            </div>
+            <button type="button" onclick="clearPatientFormForFamily()" class="flex-shrink-0 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-white border border-emerald-300 hover:bg-emerald-100/50 px-2.5 py-1 rounded-lg transition cursor-pointer">
+              為親友代約 (清除)
+            </button>
+          </div>
+
           <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
             <div class="flex items-center border-b pb-3">
               <label class="block text-sm md:text-base font-bold text-slate-900 flex items-center gap-2">
@@ -1271,21 +1282,99 @@ function setBirthdayFromISO(isoStr) {
   }
 }
 
-// --- Check Saved Patient Details (LINE UID Memory) ---
-async function checkPatientMemory() {
+// --- Check Saved Patient Details (LINE UID Memory + Local Fallback) ---
+function getLocalPatientProfile() {
   try {
-    const res = await fetch(`/api/patient?line_user_id=${encodeURIComponent(currentLineUser.userId)}`);
-    const data = await res.json();
-    if (data.found && data.patient) {
-      window.cachedPatientData = data.patient;
-      // 隱私保護：不自動帶入、不顯示「帶入上次資料」按鈕，資料僅後端記憶用
-    }
+    const raw = localStorage.getItem('qingsong_patient_profile');
+    return raw ? JSON.parse(raw) : null;
   } catch (e) {
-    console.error('Failed to load patient memory', e);
+    return null;
   }
 }
 
-// autoFillPatientData 功能已停用（隱私保護）
+async function checkPatientMemory() {
+  try {
+    // 1. 若在 LINE LIFF 環境，向後端查詢該 LINE 帳號儲存之病患資料
+    if (currentLineUser && currentLineUser.userId && !currentLineUser.userId.startsWith('U_GUEST_')) {
+      const res = await fetch(`/api/patient?line_user_id=${encodeURIComponent(currentLineUser.userId)}`);
+      const data = await res.json();
+      if (data.found && data.patient) {
+        window.cachedPatientData = {
+          name: data.patient.name,
+          phone: data.patient.phone,
+          birthday: data.patient.birthday
+        };
+        try {
+          localStorage.setItem('qingsong_patient_profile', JSON.stringify(window.cachedPatientData));
+        } catch (e) {}
+        applyPatientMemory();
+        return;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load patient memory from API', e);
+  }
+
+  // 2. 本地快取備援（訪客測試模式或跨次預約直接從裝置載入上次填寫紀錄）
+  const localProf = getLocalPatientProfile();
+  if (localProf && localProf.name) {
+    window.cachedPatientData = localProf;
+    applyPatientMemory();
+  }
+}
+
+function applyPatientMemory() {
+  const profile = window.cachedPatientData || getLocalPatientProfile();
+  if (!profile || !profile.name) return;
+
+  const nameInput = document.getElementById('inputName');
+  const phoneInput = document.getElementById('inputPhone');
+  const banner = document.getElementById('patientMemoryBanner');
+  const bannerText = document.getElementById('patientMemoryBannerText');
+
+  if (nameInput && (!nameInput.value || nameInput.value.trim() === '')) {
+    nameInput.value = profile.name;
+    bookingData.name = profile.name;
+  }
+  if (phoneInput && (!phoneInput.value || phoneInput.value.trim() === '')) {
+    phoneInput.value = profile.phone;
+    bookingData.phone = profile.phone;
+  }
+  const yearSelect = document.getElementById('birthYear');
+  if (yearSelect && (!yearSelect.value || yearSelect.value === '') && profile.birthday) {
+    setBirthdayFromISO(profile.birthday);
+    bookingData.birthday = profile.birthday;
+  }
+
+  if (banner && bannerText && (profile.name || profile.phone)) {
+    banner.classList.remove('hidden');
+    bannerText.innerHTML = `已自動帶入您上次的預約資料（<strong>${profile.name || ''}</strong> / ${profile.phone || ''}），如為親友代約可點右側清除。`;
+    lucide.createIcons();
+  }
+}
+
+function clearPatientFormForFamily() {
+  const nameInput = document.getElementById('inputName');
+  const phoneInput = document.getElementById('inputPhone');
+  const yearSelect = document.getElementById('birthYear');
+  const monthSelect = document.getElementById('birthMonth');
+  const daySelect = document.getElementById('birthDay');
+  const hiddenBday = document.getElementById('inputBirthday');
+  const banner = document.getElementById('patientMemoryBanner');
+
+  if (nameInput) nameInput.value = '';
+  if (phoneInput) phoneInput.value = '';
+  if (yearSelect) yearSelect.value = '';
+  if (monthSelect) monthSelect.value = '';
+  if (daySelect) daySelect.value = '';
+  if (hiddenBday) hiddenBday.value = '';
+  bookingData.name = '';
+  bookingData.phone = '';
+  bookingData.birthday = '';
+
+  if (banner) banner.classList.add('hidden');
+  if (nameInput) nameInput.focus();
+}
 
 // --- Tab Switching (Responsive Desktop & Mobile) ---
 function switchTab(tabId) {
@@ -1506,6 +1595,7 @@ function goToStep(step) {
       alert('請先選取看診日期與預約時段');
       return;
     }
+    applyPatientMemory();
   } else if (step === 4) {
     bookingData.name = document.getElementById('inputName').value.trim();
     bookingData.phone = document.getElementById('inputPhone').value.trim();
@@ -1993,6 +2083,19 @@ async function submitBooking() {
       therapist: result.therapist_name || '診所安排',
       visit_type: bookingData.visitType || 'FIRST_VISIT'
     };
+
+    // 儲存病患資料快取，下次預約直接自動帶入
+    try {
+      const profileToSave = {
+        name: bookingData.name,
+        phone: bookingData.phone,
+        birthday: bookingData.birthday
+      };
+      window.cachedPatientData = profileToSave;
+      localStorage.setItem('qingsong_patient_profile', JSON.stringify(profileToSave));
+    } catch (e) {
+      console.warn('Failed to cache patient profile:', e);
+    }
 
     const lineBox = document.getElementById('successLineStatusBox');
     const lineTitle = document.getElementById('successLineStatusTitle');
