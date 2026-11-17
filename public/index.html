@@ -575,6 +575,7 @@
                 <span>Apple / 手機日曆</span>
               </button>
             </div>
+            <p class="text-[10px] text-amber-700/80 text-center pt-0.5">※ iPhone 建議選 Apple 日曆，Android 建議選 Google 日曆</p>
           </div>
 
             <div class="flex space-x-3 pt-2">
@@ -2002,6 +2003,10 @@ async function submitBooking() {
         lineBox.className = 'p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-left';
         lineTitle.innerHTML = '<i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600"></i> 訪客預約提醒（未綁定 LINE 通知）：';
         lineDesc.innerHTML = '您剛才使用網頁訪客模式預約，系統已為您保留時段，但<strong>無法主動傳送 LINE 卡片通知</strong>（診所將以電話聯絡確認）。若希望改用 LINE 收通知，歡迎從官方帳號 <code>@557fabgw</code> 進入預約！';
+      } else if (result.is_imminent) {
+        lineBox.className = 'p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200 text-left';
+        lineTitle.innerHTML = '<i data-lucide="zap" class="w-4 h-4 text-emerald-600"></i> ⚡ 明日即期看診憑證 ＆ 出席確認已發送：';
+        lineDesc.innerHTML = '您預約的是<strong>明日看診時段</strong>，系統已將包含「確認出席」按鈕的憑證傳送至您的 LINE！<strong>請直接至 LINE 點選「會準時前往」</strong>即可完成報到保留，無需等待下午五點推播！';
       } else {
         lineBox.className = 'p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-left';
         lineTitle.innerHTML = '<i data-lucide="bell" class="w-4 h-4 text-pine-600"></i> LINE 出席確認推播：';
@@ -2083,8 +2088,19 @@ function addToGoogleCalendar(apt) {
     details: description,
     location: location
   });
+  const fullUrl = `${baseUrl}&${params.toString()}`;
 
-  window.open(`${baseUrl}&${params.toString()}`, '_blank');
+  // 在 LINE LIFF 內嵌環境中，必須使用 liff.openWindow 喚起系統外部瀏覽器，避免被 LINE webview 沙盒攔截
+  try {
+    if (window.liff && typeof liff.isInClient === 'function' && liff.isInClient()) {
+      liff.openWindow({ url: fullUrl, external: true });
+      return;
+    }
+  } catch (e) {
+    console.warn('LIFF openWindow 失敗，改用預設開啟:', e);
+  }
+
+  window.open(fullUrl, '_blank');
 }
 
 function addToAppleCalendar(apt) {
@@ -2092,48 +2108,30 @@ function addToAppleCalendar(apt) {
     alert('預約資料不完整，無法加入行事曆');
     return;
   }
-  const { title, location, description } = buildCalendarDetails(apt);
-  const startCompact = `${apt.date.replace(/-/g, '')}T${apt.time.replace(/:/g, '')}00`;
-  const [h, m] = apt.time.split(':').map(Number);
-  const endH = String(h + 1).padStart(2, '0');
-  const endM = String(m).padStart(2, '0');
-  const endCompact = `${apt.date.replace(/-/g, '')}T${endH}${endM}00`;
-  const nowCompact = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
 
-  const icsContent = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//Qingsong Physical Therapy Clinic//Appointment System//TW',
-    'CALSCALE:GREGORIAN',
-    'METHOD:PUBLISH',
-    'BEGIN:VEVENT',
-    `UID:${nowCompact}-apt-${apt.id || apt.date}@qingsong-pt`,
-    `DTSTAMP:${nowCompact}`,
-    `DTSTART;TZID=Asia/Taipei:${startCompact}`,
-    `DTEND;TZID=Asia/Taipei:${endCompact}`,
-    `SUMMARY:${title}`,
-    `DESCRIPTION:${description.replace(/\n/g, '\\n')}`,
-    `LOCATION:${location}`,
-    'STATUS:CONFIRMED',
-    // 預設提前 120 分鐘（2 小時）跳出手機提醒
-    'BEGIN:VALARM',
-    'TRIGGER:-PT120M',
-    'ACTION:DISPLAY',
-    'DESCRIPTION:青松物理治療看診提醒（2 小時前）',
-    'END:VALARM',
-    'END:VEVENT',
-    'END:VCALENDAR'
-  ].join('\r\n');
+  // 透過伺服器端 RFC 5545 iCalendar 標準串流 (/api/calendar/ics)
+  // 在 iOS Safari 開啟時可直接喚起 iOS 原生「加入行事曆」選單，零下載、一鍵完成
+  const params = new URLSearchParams({
+    apt_id: apt.id || '',
+    date: apt.date || '',
+    time: apt.time || '',
+    therapist: apt.therapist || '',
+    visit_type: apt.visit_type || ''
+  });
+  const icsUrl = `${window.location.origin}/api/calendar/ics?${params.toString()}`;
 
-  const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.setAttribute('download', `qingsong_${apt.date}_${apt.time.replace(/:/g, '')}.ics`);
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => window.URL.revokeObjectURL(url), 2000);
+  // 在 LINE LIFF 內嵌環境中，透過 external: true 喚起 Safari 直接跳出行事曆加入畫面
+  try {
+    if (window.liff && typeof liff.isInClient === 'function' && liff.isInClient()) {
+      liff.openWindow({ url: icsUrl, external: true });
+      return;
+    }
+  } catch (e) {
+    console.warn('LIFF openWindow 失敗，改用標準導向:', e);
+  }
+
+  // 一般瀏覽器直接導向該 ICS 串流（iOS Safari 會直接跳出加入行事曆；電腦版會下載或開啟日曆程式）
+  window.location.href = icsUrl;
 }
 
 function addToGoogleCalendarFromSuccess() {

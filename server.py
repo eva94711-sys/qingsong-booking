@@ -224,6 +224,8 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.api_get_schedule_summary(query)
         elif path == "/api/appointments":
             self.api_get_appointments(query)
+        elif path == "/api/calendar/ics":
+            self.api_get_calendar_ics(query)
         elif path == "/api/admin/verify":
             self.send_json({"valid": True, "status": "authenticated"})
         elif path == "/api/admin/appointments":
@@ -1097,17 +1099,23 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             apt_id = "APT" + now_tw.strftime("%Y%m%d%H%M%S") + uuid.uuid4().hex[:4].upper()
             now_str = now_tw.strftime("%Y-%m-%d %H:%M:%S")
 
+            # 智慧判定：若預約看診時間在未來 24 小時之內（例如晚上掛明天的號），標記為即期看診並二合一附上出席確認
+            is_imminent = slot_dt <= now_tw + timedelta(hours=24)
+            initial_status = "PENDING_CONFIRM" if is_imminent else "RESERVED"
+            reminder_sent = now_str if is_imminent else None
+
             cursor.execute("""
                 INSERT INTO appointments (
                     id, line_user_id, patient_name, patient_phone, patient_birthday,
                     therapist_id, therapist_name, visit_type, has_referral_slip,
                     appointment_date, appointment_time, status, patient_note,
-                    created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RESERVED', ?, ?)
+                    reminder_sent_at, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 apt_id, line_user_id, patient_name, patient_phone, patient_birthday,
                 assigned_therapist_id, assigned_therapist_name, visit_type, has_referral_slip,
-                appointment_date, appointment_time, patient_note, now_str
+                appointment_date, appointment_time, initial_status, patient_note,
+                reminder_sent, now_str
             ))
 
             # Remember patient details
@@ -1124,13 +1132,18 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             conn.commit()
             invalidate_schedule_cache()
 
-            # Generate Flex Message payload
-            flex_receipt = self.generate_flex_receipt(apt_id, patient_name, assigned_therapist_name, appointment_date, appointment_time, visit_type, has_referral_slip)
+            # Generate Flex Message payload (若是即期看診，二合一直接整合出席確認按鈕)
+            flex_receipt = self.generate_flex_receipt(
+                apt_id, patient_name, assigned_therapist_name,
+                appointment_date, appointment_time, visit_type, has_referral_slip,
+                is_imminent=is_imminent
+            )
 
             # Push instant receipt to patient's LINE chat
             line_notified = False
             if line_user_id and not line_user_id.startswith("U_GUEST_"):
-                line_notified = self.send_line_push_flex(line_user_id, "【青松物理治療所】預約掛號成功憑證", flex_receipt)
+                alt_title = "【青松物理治療所】明日看診確認與預約憑證" if is_imminent else "【青松物理治療所】預約掛號成功憑證"
+                line_notified = self.send_line_push_flex(line_user_id, alt_title, flex_receipt)
 
             self.send_json({
                 "success": True,
@@ -1138,6 +1151,7 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "therapist_name": assigned_therapist_name,
                 "appointment_date": appointment_date,
                 "appointment_time": appointment_time,
+                "is_imminent": is_imminent,
                 "line_notified": line_notified,
                 "flex_receipt": flex_receipt
             })
@@ -1607,7 +1621,8 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         cursor.execute("""
             SELECT * FROM appointments 
-            WHERE (status = 'RESERVED' OR status = 'PENDING_CONFIRM')
+            WHERE status = 'RESERVED'
+              AND reminder_sent_at IS NULL
               AND (
                 appointment_date = ? 
                 OR (appointment_date = ? AND appointment_time >= ?)
@@ -1689,45 +1704,196 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         invalidate_schedule_cache()
         self.send_json({"success": True, "handled": results})
 
+    def api_get_calendar_ics(self, query):
+        apt_id = query.get("apt_id", [""])[0].strip()
+        date_str = query.get("date", [""])[0].strip()
+        time_str = query.get("time", [""])[0].strip()
+        therapist = query.get("therapist", [""])[0].strip()
+        visit_type = query.get("visit_type", [""])[0].strip()
+
+        if apt_id and (not date_str or not time_str):
+            conn = database.get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM appointments WHERE id = ?", (apt_id,))
+            row = cursor.fetchone()
+            conn.close()
+            if row:
+                date_str = row["appointment_date"]
+                time_str = row["appointment_time"]
+                therapist = row["therapist_name"]
+                visit_type = row["visit_type"]
+
+        if not date_str or not time_str:
+            self.send_error(400, "Missing date or time")
+            return
+
+        type_map = {
+            "FIRST_VISIT": "初診整體評估治療",
+            "FOLLOW_UP": "複診治療",
+            "FITNESS": "銀髮族肌力體適能指導"
+        }
+        type_name = type_map.get(visit_type, visit_type or "物理治療門診")
+        therapist_name = therapist or "診所安排"
+        if therapist_name and not ("院長" in therapist_name or "治療師" in therapist_name or therapist_name == "診所安排"):
+            therapist_name += " 物理治療師"
+
+        title = f"青松物理治療 - {type_name}（{therapist_name}）"
+        location = "青松物理治療所（高雄市鳥松區華美路69號）"
+        description = "\\n".join([
+            "【青松物理治療所 門診預約憑證】",
+            f"預約編號：{apt_id or 'N/A'}",
+            f"看診項目：{type_name}",
+            f"負責治療師：{therapist_name}",
+            "診所電話：07-7353353",
+            "診所地址：高雄市鳥松區華美路69號",
+            "官方 LINE：@557fabgw",
+            "",
+            "【就診前貼心叮嚀】",
+            "1. 初診病患請務必攜帶健保卡及「醫師照會單／轉診單」。",
+            "2. 建議穿著舒適寬鬆之運動或休閒衣物，以利關節活動度評估與徒手治療。",
+            "3. 門診採專人預約制，請提前 5 分鐘抵達診所報到。",
+            "4. 如因故需改期或取消，請提前至官方 LINE 或來電告知，感謝您的配合！"
+        ])
+
+        start_compact = f"{date_str.replace('-', '')}T{time_str.replace(':', '')}00"
+        h, m = [int(x) for x in time_str.split(":")]
+        end_h = str(h + 1).zfill(2)
+        end_m = str(m).zfill(2)
+        end_compact = f"{date_str.replace('-', '')}T{end_h}{end_m}00"
+        now_compact = taiwan_now().strftime("%Y%m%dT%H%M%SZ")
+
+        ics_lines = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//Qingsong Physical Therapy Clinic//Appointment System//TW",
+            "CALSCALE:GREGORIAN",
+            "METHOD:PUBLISH",
+            "BEGIN:VEVENT",
+            f"UID:{now_compact}-apt-{apt_id or date_str}@qingsong-pt",
+            f"DTSTAMP:{now_compact}",
+            f"DTSTART;TZID=Asia/Taipei:{start_compact}",
+            f"DTEND;TZID=Asia/Taipei:{end_compact}",
+            f"SUMMARY:{title}",
+            f"DESCRIPTION:{description}",
+            f"LOCATION:{location}",
+            "STATUS:CONFIRMED",
+            "BEGIN:VALARM",
+            "TRIGGER:-PT120M",
+            "ACTION:DISPLAY",
+            "DESCRIPTION:青松物理治療看診提醒（2 小時前）",
+            "END:VALARM",
+            "END:VEVENT",
+            "END:VCALENDAR"
+        ]
+        ics_bytes = "\r\n".join(ics_lines).encode("utf-8")
+
+        self.send_response(200)
+        self.send_header("Content-Type", "text/calendar; charset=utf-8")
+        self.send_header("Content-Disposition", f"inline; filename=qingsong_{date_str}_{time_str.replace(':', '')}.ics")
+        self.send_header("Content-Length", str(len(ics_bytes)))
+        self.send_security_headers()
+        self.end_headers()
+        self.wfile.write(ics_bytes)
+
     # --- LINE Flex Message Generators ---
-    def generate_flex_receipt(self, apt_id, name, therapist, date_str, time_str, v_type, slip):
+    def generate_flex_receipt(self, apt_id, name, therapist, date_str, time_str, v_type, slip, is_imminent=False):
         type_str = "初診評估" if v_type == "FIRST_VISIT" else ("肌力訓練" if v_type == "FITNESS" else "複診追蹤")
         slip_str = "當天請攜帶照會/轉診單正本" if slip else "免照會單"
-        return {
+
+        body_contents = [
+            {"type": "text", "text": f"您好，{name}：您的預約已成立！", "weight": "bold", "size": "md"},
+            {"type": "separator", "margin": "md"},
+            {
+                "type": "box",
+                "layout": "vertical",
+                "margin": "md",
+                "spacing": "sm",
+                "contents": [
+                    {"type": "text", "text": f"🗓 預約日期：{date_str} ({time_str})", "size": "sm", "color": "#334155", "weight": "bold"},
+                    {"type": "text", "text": f"👨‍⚕️ 物理治療師：{therapist}", "size": "sm", "color": "#334155"},
+                    {"type": "text", "text": f"📋 就診類別：{type_str}", "size": "sm", "color": "#334155"},
+                    {"type": "text", "text": f"📄 轉診叮嚀：{slip_str}", "size": "sm", "color": "#15803d"},
+                    {"type": "text", "text": "📍 地點：高雄市鳥松區華美路69號", "size": "sm", "color": "#64748b"}
+                ]
+            },
+            {"type": "separator", "margin": "md"}
+        ]
+
+        bubble = {
             "type": "bubble",
             "header": {
                 "type": "box",
                 "layout": "vertical",
-                "backgroundColor": "#15803d",
+                "backgroundColor": "#047857" if is_imminent else "#15803d",
                 "contents": [
-                    {"type": "text", "text": "🌲 青松物理治療所", "color": "#ffffff", "weight": "bold", "size": "md"},
-                    {"type": "text", "text": "預約掛號成功憑證", "color": "#dcfce7", "weight": "bold", "size": "xl", "margin": "xs"}
-                ]
-            },
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {"type": "text", "text": f"您好，{name}：您的預約已成立！", "weight": "bold", "size": "md"},
-                    {"type": "separator", "margin": "md"},
+                    {"type": "text", "text": "🌲 青松物理治療所", "color": "#ffffff", "weight": "bold", "size": "sm"},
                     {
-                        "type": "box",
-                        "layout": "vertical",
-                        "margin": "md",
-                        "spacing": "sm",
-                        "contents": [
-                            {"type": "text", "text": f"🗓 預約日期：{date_str} ({time_str})", "size": "sm", "color": "#334155"},
-                            {"type": "text", "text": f"👨‍⚕️ 物理治療師：{therapist}", "size": "sm", "color": "#334155"},
-                            {"type": "text", "text": f"📋 就診類別：{type_str}", "size": "sm", "color": "#334155"},
-                            {"type": "text", "text": f"📄 轉診叮嚀：{slip_str}", "size": "sm", "color": "#15803d"},
-                            {"type": "text", "text": f"📍 地點：高雄市鳥松區華美路69號", "size": "sm", "color": "#64748b"}
-                        ]
-                    },
-                    {"type": "separator", "margin": "md"},
-                    {"type": "text", "text": "🔔 我們將於「看診前一天下午 5 點」發送出席確認通知，屆時請留意 LINE 訊息並點擊確認！", "size": "xs", "color": "#059669", "margin": "md", "wrap": True}
+                        "type": "text",
+                        "text": "明日即期看診憑證 ＆ 出席確認" if is_imminent else "預約掛號成功憑證",
+                        "color": "#fef08a" if is_imminent else "#dcfce7",
+                        "weight": "bold",
+                        "size": "lg",
+                        "margin": "xs"
+                    }
                 ]
             }
         }
+
+        if is_imminent:
+            body_contents.append({
+                "type": "text",
+                "text": "⚡ 貼心提醒：本次預約為明日看診，請點選下方按鈕直接確認明日是否能準時前往：",
+                "size": "xs",
+                "color": "#b45309",
+                "margin": "md",
+                "weight": "bold",
+                "wrap": True
+            })
+            bubble["footer"] = {
+                "type": "box",
+                "layout": "horizontal",
+                "spacing": "md",
+                "contents": [
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "color": "#15803d",
+                        "action": {
+                            "type": "postback",
+                            "label": "✅ 會準時前往",
+                            "data": f"action=confirm&apt_id={apt_id}",
+                            "displayText": "我會準時前往青松物理治療所！"
+                        }
+                    },
+                    {
+                        "type": "button",
+                        "style": "secondary",
+                        "color": "#fee2e2",
+                        "action": {
+                            "type": "postback",
+                            "label": "❌ 無法前往/取消",
+                            "data": f"action=cancel&apt_id={apt_id}",
+                            "displayText": "很抱歉，明日臨時有事需取消預約。"
+                        }
+                    }
+                ]
+            }
+        else:
+            body_contents.append({
+                "type": "text",
+                "text": "🔔 我們將於「看診前一天下午 5 點」發送出席確認通知，屆時請留意 LINE 訊息並點擊確認！",
+                "size": "xs",
+                "color": "#059669",
+                "margin": "md",
+                "wrap": True
+            })
+
+        bubble["body"] = {
+            "type": "box",
+            "layout": "vertical",
+            "contents": body_contents
+        }
+        return bubble
 
     def generate_flex_confirmation(self, apt):
         """Day-before 24H confirmation Flex Message with interactive buttons"""
