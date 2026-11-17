@@ -553,6 +553,30 @@
             </div>
           </div>
 
+          <!-- 加入手機行事曆卡片 -->
+          <div class="p-4 bg-amber-50/80 border border-amber-200/90 rounded-2xl text-left space-y-2.5 shadow-xs">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1.5 text-xs font-bold text-amber-950">
+                <i data-lucide="calendar-plus" class="w-4 h-4 text-amber-600"></i>
+                <span>將看診時間存入手機行事曆</span>
+              </div>
+              <span class="text-[10px] text-amber-800 bg-amber-100 border border-amber-300/60 px-2 py-0.5 rounded-full font-medium">看診前 2 小時提醒</span>
+            </div>
+            <p class="text-[11px] text-amber-800 leading-relaxed">
+              避免忘記看診！點擊下方按鈕可一鍵將預約時段、診所導航與初診注意事項儲存至您的日曆：
+            </p>
+            <div class="grid grid-cols-2 gap-2 pt-1">
+              <button type="button" onclick="addToGoogleCalendarFromSuccess()" class="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-white hover:bg-slate-50 active:bg-slate-100 border border-slate-300 text-slate-800 font-bold rounded-xl text-xs shadow-xs transition cursor-pointer">
+                <svg class="w-4 h-4" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+                <span>Google 日曆</span>
+              </button>
+              <button type="button" onclick="addToAppleCalendarFromSuccess()" class="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-white hover:bg-slate-50 active:bg-slate-100 border border-slate-300 text-slate-800 font-bold rounded-xl text-xs shadow-xs transition cursor-pointer">
+                <i data-lucide="apple" class="w-4 h-4 text-slate-800"></i>
+                <span>Apple / 手機日曆</span>
+              </button>
+            </div>
+          </div>
+
             <div class="flex space-x-3 pt-2">
             <button onclick="switchTab('mybookings')" class="flex-1 py-3.5 bg-pine-700 hover:bg-pine-800 text-white font-bold rounded-xl text-xs md:text-sm transition">
               前往「我的預約」查看
@@ -1961,6 +1985,14 @@ async function submitBooking() {
         : (result.therapist_name ? result.therapist_name + ' 物理治療師' : '診所安排');
     }
 
+    latestBookingDetails = {
+      id: result.appointment_id,
+      date: result.appointment_date,
+      time: result.appointment_time,
+      therapist: result.therapist_name || '診所安排',
+      visit_type: bookingData.visitType || 'FIRST_VISIT'
+    };
+
     const lineBox = document.getElementById('successLineStatusBox');
     const lineTitle = document.getElementById('successLineStatusTitle');
     const lineDesc = document.getElementById('successLineStatusDesc');
@@ -1993,6 +2025,151 @@ async function submitBooking() {
 function resetBookingForm() {
   document.getElementById('bookingSuccessView').classList.add('hidden');
   goToStep(1);
+}
+
+// --- Calendar Event Helpers (Google & Apple/ICS) ---
+let latestBookingDetails = null;
+
+function buildCalendarDetails(apt) {
+  const typeMap = {
+    'FIRST_VISIT': '初診整體評估治療',
+    'FOLLOW_UP': '複診治療',
+    'FITNESS': '銀髮族肌力體適能指導'
+  };
+  const typeName = typeMap[apt.visit_type] || apt.visit_type || '物理治療門診';
+  let therapistName = apt.therapist || '診所安排';
+  if (therapistName && !therapistName.includes('院長') && !therapistName.includes('物理治療師') && therapistName !== '診所安排') {
+    therapistName += ' 物理治療師';
+  }
+
+  const title = `青松物理治療 - ${typeName}（${therapistName}）`;
+  const location = '青松物理治療所（高雄市鳥松區華美路69號）';
+  const description = [
+    '【青松物理治療所 門診預約憑證】',
+    `預約編號：${apt.id || 'N/A'}`,
+    `看診項目：${typeName}`,
+    `負責治療師：${therapistName}`,
+    '診所電話：07-7353353',
+    '診所地址：高雄市鳥松區華美路69號',
+    '官方 LINE：@557fabgw',
+    '',
+    '【就診前貼心叮嚀】',
+    '1. 初診病患請務必攜帶健保卡及「醫師照會單／轉診單」。',
+    '2. 建議穿著舒適寬鬆之運動或休閒衣物，以利關節活動度評估與徒手治療。',
+    '3. 門診採專人預約制，請提前 5 分鐘抵達診所報到。',
+    '4. 如因故需改期或取消，請提前至官方 LINE 或來電告知，感謝您的配合！'
+  ].join('\n');
+
+  return { title, location, description, typeName, therapistName };
+}
+
+function addToGoogleCalendar(apt) {
+  if (!apt || !apt.date || !apt.time) {
+    alert('預約資料不完整，無法加入行事曆');
+    return;
+  }
+  const { title, location, description } = buildCalendarDetails(apt);
+  const startLocal = `${apt.date.replace(/-/g, '')}T${apt.time.replace(/:/g, '')}00`;
+  const [h, m] = apt.time.split(':').map(Number);
+  const endH = String(h + 1).padStart(2, '0');
+  const endM = String(m).padStart(2, '0');
+  const endLocal = `${apt.date.replace(/-/g, '')}T${endH}${endM}00`;
+
+  const baseUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE';
+  const params = new URLSearchParams({
+    text: title,
+    dates: `${startLocal}/${endLocal}`,
+    ctz: 'Asia/Taipei',
+    details: description,
+    location: location
+  });
+
+  window.open(`${baseUrl}&${params.toString()}`, '_blank');
+}
+
+function addToAppleCalendar(apt) {
+  if (!apt || !apt.date || !apt.time) {
+    alert('預約資料不完整，無法加入行事曆');
+    return;
+  }
+  const { title, location, description } = buildCalendarDetails(apt);
+  const startCompact = `${apt.date.replace(/-/g, '')}T${apt.time.replace(/:/g, '')}00`;
+  const [h, m] = apt.time.split(':').map(Number);
+  const endH = String(h + 1).padStart(2, '0');
+  const endM = String(m).padStart(2, '0');
+  const endCompact = `${apt.date.replace(/-/g, '')}T${endH}${endM}00`;
+  const nowCompact = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+  const icsContent = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Qingsong Physical Therapy Clinic//Appointment System//TW',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:${nowCompact}-apt-${apt.id || apt.date}@qingsong-pt`,
+    `DTSTAMP:${nowCompact}`,
+    `DTSTART;TZID=Asia/Taipei:${startCompact}`,
+    `DTEND;TZID=Asia/Taipei:${endCompact}`,
+    `SUMMARY:${title}`,
+    `DESCRIPTION:${description.replace(/\n/g, '\\n')}`,
+    `LOCATION:${location}`,
+    'STATUS:CONFIRMED',
+    // 預設提前 120 分鐘（2 小時）跳出手機提醒
+    'BEGIN:VALARM',
+    'TRIGGER:-PT120M',
+    'ACTION:DISPLAY',
+    'DESCRIPTION:青松物理治療看診提醒（2 小時前）',
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].join('\r\n');
+
+  const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `qingsong_${apt.date}_${apt.time.replace(/:/g, '')}.ics`);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => window.URL.revokeObjectURL(url), 2000);
+}
+
+function addToGoogleCalendarFromSuccess() {
+  if (latestBookingDetails) {
+    addToGoogleCalendar(latestBookingDetails);
+  } else {
+    const idEl = document.getElementById('successAptId');
+    const dateEl = document.getElementById('successDate');
+    const timeEl = document.getElementById('successTime');
+    const thEl = document.getElementById('successTherapist');
+    addToGoogleCalendar({
+      id: idEl ? idEl.textContent : '',
+      date: dateEl ? dateEl.textContent : '',
+      time: timeEl ? timeEl.textContent : '',
+      therapist: thEl ? thEl.textContent : '',
+      visit_type: bookingData.visitType
+    });
+  }
+}
+
+function addToAppleCalendarFromSuccess() {
+  if (latestBookingDetails) {
+    addToAppleCalendar(latestBookingDetails);
+  } else {
+    const idEl = document.getElementById('successAptId');
+    const dateEl = document.getElementById('successDate');
+    const timeEl = document.getElementById('successTime');
+    const thEl = document.getElementById('successTherapist');
+    addToAppleCalendar({
+      id: idEl ? idEl.textContent : '',
+      date: dateEl ? dateEl.textContent : '',
+      time: timeEl ? timeEl.textContent : '',
+      therapist: thEl ? thEl.textContent : '',
+      visit_type: bookingData.visitType
+    });
+  }
 }
 
 // --- Load My Appointments ---
@@ -2065,6 +2242,22 @@ async function loadMyAppointments() {
           <div class="flex justify-between"><span>預約病患：</span><span>${apt.patient_name} (${apt.patient_phone})</span></div>
         </div>
         ${apt.status !== 'CANCELLED' ? `
+          <div class="pt-2 border-t flex items-center justify-between gap-2">
+            <span class="text-[11px] text-slate-400 flex items-center gap-1">
+              <i data-lucide="calendar-plus" class="w-3.5 h-3.5 text-amber-600"></i>
+              <span>存入行事曆：</span>
+            </span>
+            <div class="flex items-center gap-1.5">
+              <button type="button" onclick="addToGoogleCalendar({ id: '${apt.id}', date: '${apt.appointment_date}', time: '${apt.appointment_time}', therapist: '${(apt.therapist_name || '').replace(/'/g, "\\'")}', visit_type: '${apt.visit_type || ''}' })" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-50 hover:bg-blue-50 border border-slate-200 text-slate-700 hover:text-blue-700 text-[11px] font-bold transition cursor-pointer">
+                <svg class="w-3 h-3" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+                <span>Google</span>
+              </button>
+              <button type="button" onclick="addToAppleCalendar({ id: '${apt.id}', date: '${apt.appointment_date}', time: '${apt.appointment_time}', therapist: '${(apt.therapist_name || '').replace(/'/g, "\\'")}', visit_type: '${apt.visit_type || ''}' })" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900 text-[11px] font-bold transition cursor-pointer">
+                <i data-lucide="apple" class="w-3 h-3 text-slate-800"></i>
+                <span>Apple</span>
+              </button>
+            </div>
+          </div>
           <div class="pt-2 border-t flex space-x-2">
             ${apt.status === 'PENDING_CONFIRM' ? `
               <button onclick="confirmAppointment('${apt.id}')" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1">
