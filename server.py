@@ -12,6 +12,9 @@ import io
 import re
 import threading
 import time
+import hashlib
+import secrets
+import hmac
 from datetime import datetime, timedelta
 import database
 
@@ -34,6 +37,129 @@ def taiwan_now():
     return datetime.utcnow() + timedelta(hours=8)
 
 
+# --- Admin Security & Rate Limiting ---
+_FAILED_LOGINS = {}  # ip -> list of float timestamps
+_FAILED_LOGIN_LOCK = threading.Lock()
+MAX_FAILED_ATTEMPTS = 5
+LOCKOUT_MINUTES = 10
+
+
+def check_login_rate_limit(ip):
+    now = time.time()
+    cutoff = now - (LOCKOUT_MINUTES * 60)
+    with _FAILED_LOGIN_LOCK:
+        attempts = _FAILED_LOGINS.get(ip, [])
+        attempts = [t for t in attempts if t > cutoff]
+        _FAILED_LOGINS[ip] = attempts
+        if len(attempts) >= MAX_FAILED_ATTEMPTS:
+            remaining_seconds = int(attempts[0] + (LOCKOUT_MINUTES * 60) - now)
+            return False, max(1, (remaining_seconds + 59) // 60)
+        return True, 0
+
+
+def record_failed_login(ip):
+    now = time.time()
+    with _FAILED_LOGIN_LOCK:
+        if ip not in _FAILED_LOGINS:
+            _FAILED_LOGINS[ip] = []
+        _FAILED_LOGINS[ip].append(now)
+
+
+def clear_failed_logins(ip):
+    with _FAILED_LOGIN_LOCK:
+        if ip in _FAILED_LOGINS:
+            del _FAILED_LOGINS[ip]
+
+
+def verify_admin_password(input_password):
+    if not input_password or not isinstance(input_password, str):
+        return False
+
+    # 1. Render environment variable override (if set)
+    env_password = os.environ.get("ADMIN_PASSWORD", "").strip()
+    if env_password and input_password == env_password:
+        return True
+
+    # 2. Database hash & salt
+    conn = database.get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT key, value FROM settings WHERE key IN ('admin_password_hash', 'admin_password_salt')")
+    rows = cursor.fetchall()
+    settings_dict = {r["key"]: r["value"] for r in rows}
+    conn.close()
+
+    salt = settings_dict.get("admin_password_salt")
+    pwd_hash = settings_dict.get("admin_password_hash")
+
+    if not salt or not pwd_hash:
+        return input_password == "557fabgw"
+
+    expected_hash = hashlib.sha256((salt + input_password).encode("utf-8")).hexdigest()
+    return hmac.compare_digest(pwd_hash, expected_hash)
+
+
+def update_admin_password(new_password):
+    salt = secrets.token_hex(16)
+    pwd_hash = hashlib.sha256((salt + new_password).encode("utf-8")).hexdigest()
+    conn = database.get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO settings (key, value) VALUES ('admin_password_salt', ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+        (salt,)
+    )
+    cursor.execute(
+        "INSERT INTO settings (key, value) VALUES ('admin_password_hash', ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+        (pwd_hash,)
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def create_admin_session(remember_me=False):
+    token = secrets.token_urlsafe(32)
+    now_dt = taiwan_now()
+    created_at = now_dt.strftime("%Y-%m-%d %H:%M:%S")
+    duration_hours = 24 * 7 if remember_me else 12
+    expires_at = (now_dt + timedelta(hours=duration_hours)).strftime("%Y-%m-%d %H:%M:%S")
+
+    conn = database.get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM admin_sessions WHERE expires_at <= ?", (created_at,))
+    cursor.execute(
+        "INSERT INTO admin_sessions (token, expires_at, created_at) VALUES (?, ?, ?)",
+        (token, expires_at, created_at)
+    )
+    conn.commit()
+    conn.close()
+    return token, expires_at, duration_hours * 3600
+
+
+def validate_admin_session(token):
+    if not token or not isinstance(token, str):
+        return False
+    now_str = taiwan_now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = database.get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT token FROM admin_sessions WHERE token = ? AND expires_at > ?",
+        (token, now_str)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return bool(row)
+
+
+def delete_admin_session(token):
+    if not token:
+        return
+    conn = database.get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM admin_sessions WHERE token = ?", (token,))
+    conn.commit()
+    conn.close()
+
+
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
@@ -47,13 +173,18 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Admin-Token")
         self.end_headers()
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         query = urllib.parse.parse_qs(parsed.query)
+
+        # Protect all admin API routes
+        if path.startswith("/api/admin/"):
+            if not self.require_admin_auth(query):
+                return
 
         # Route matching
         if path == "/" or path == "/index.html":
@@ -80,6 +211,8 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.api_get_schedule_summary(query)
         elif path == "/api/appointments":
             self.api_get_appointments(query)
+        elif path == "/api/admin/verify":
+            self.send_json({"valid": True, "status": "authenticated"})
         elif path == "/api/admin/appointments":
             self.api_admin_get_appointments(query)
         elif path == "/api/admin/stats":
@@ -99,7 +232,21 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         path = parsed.path
         body = self.read_json_body()
 
-        if path == "/api/appointments":
+        # Admin login is public
+        if path == "/api/admin/login":
+            self.api_admin_login(body)
+            return
+
+        # All other admin routes require valid authentication
+        if path.startswith("/api/admin/"):
+            if not self.require_admin_auth():
+                return
+
+        if path == "/api/admin/logout":
+            self.api_admin_logout()
+        elif path == "/api/admin/change-password":
+            self.api_admin_change_password(body)
+        elif path == "/api/appointments":
             self.api_create_appointment(body)
         elif path.startswith("/api/appointments/") and path.endswith("/cancel"):
             apt_id = path.split("/")[3]
@@ -131,11 +278,109 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_DELETE(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+
+        if path.startswith("/api/admin/"):
+            if not self.require_admin_auth():
+                return
+
         if path.startswith("/api/admin/schedule-overrides/"):
             ov_id = path.split("/")[4]
             self.api_admin_delete_schedule_override(ov_id)
         else:
             self.send_json({"error": "Endpoint not found"}, status=404)
+
+    # --- Auth & Security Helpers ---
+    def get_client_ip(self):
+        xff = self.headers.get("X-Forwarded-For")
+        if xff:
+            return xff.split(",")[0].strip()
+        return self.client_address[0] if self.client_address else "unknown"
+
+    def get_admin_token(self, query=None):
+        auth = self.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            return auth[7:].strip()
+        token_hdr = self.headers.get("X-Admin-Token", "")
+        if token_hdr:
+            return token_hdr.strip()
+        cookie_hdr = self.headers.get("Cookie", "")
+        if cookie_hdr:
+            for part in cookie_hdr.split(";"):
+                if "=" in part:
+                    k, v = part.strip().split("=", 1)
+                    if k == "admin_session":
+                        return v.strip()
+        if query and "token" in query:
+            tok = query.get("token", [""])[0]
+            if tok:
+                return tok.strip()
+        return None
+
+    def is_admin_authenticated(self, query=None):
+        token = self.get_admin_token(query)
+        return validate_admin_session(token)
+
+    def require_admin_auth(self, query=None):
+        if not self.is_admin_authenticated(query):
+            self.send_json({
+                "error": "未授權存取：請先登入後台管理系統",
+                "code": "UNAUTHORIZED"
+            }, status=401)
+            return False
+        return True
+
+    def api_admin_login(self, body):
+        ip = self.get_client_ip()
+        allowed, remaining_min = check_login_rate_limit(ip)
+        if not allowed:
+            self.send_json({
+                "error": f"登入失敗次數過多，為維護個資安全系統已暫時鎖定。請於 {remaining_min} 分鐘後再試。",
+                "code": "RATE_LIMITED"
+            }, status=429)
+            return
+
+        password = body.get("password", "")
+        remember_me = bool(body.get("remember", False))
+
+        if not verify_admin_password(password):
+            record_failed_login(ip)
+            self.send_json({
+                "error": "管理密碼錯誤，請重新輸入！",
+                "code": "INVALID_PASSWORD"
+            }, status=401)
+            return
+
+        clear_failed_logins(ip)
+        token, expires_at, max_age = create_admin_session(remember_me)
+        cookie_header = f"admin_session={token}; Path=/; Max-Age={max_age}; SameSite=Lax; HttpOnly"
+        self.send_json({
+            "success": True,
+            "token": token,
+            "expires_at": expires_at,
+            "message": "登入成功"
+        }, status=200, cookie=cookie_header)
+
+    def api_admin_logout(self):
+        token = self.get_admin_token()
+        if token:
+            delete_admin_session(token)
+        cookie_header = "admin_session=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly"
+        self.send_json({"success": True, "message": "已成功登出"}, status=200, cookie=cookie_header)
+
+    def api_admin_change_password(self, body):
+        current_password = body.get("current_password", "")
+        new_password = body.get("new_password", "").strip()
+
+        if not verify_admin_password(current_password):
+            self.send_json({"error": "目前密碼不正確，無法更改密碼"}, status=400)
+            return
+
+        if len(new_password) < 6:
+            self.send_json({"error": "新密碼長度至少需 6 個字元"}, status=400)
+            return
+
+        update_admin_password(new_password)
+        self.send_json({"success": True, "message": "管理密碼已成功更新！下次登入請使用新密碼。"})
 
     # --- Helper methods ---
     def read_json_body(self):
@@ -148,12 +393,14 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
                 return {}
         return {}
 
-    def send_json(self, data, status=200):
+    def send_json(self, data, status=200, cookie=None):
         response_bytes = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(response_bytes)))
         self.send_header("Access-Control-Allow-Origin", "*")
+        if cookie:
+            self.send_header("Set-Cookie", cookie)
         self.end_headers()
         self.wfile.write(response_bytes)
 
@@ -260,7 +507,8 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM settings")
         rows = cursor.fetchall()
-        settings = {r["key"]: r["value"] for r in rows}
+        # Filter out sensitive admin keys
+        settings = {r["key"]: r["value"] for r in rows if not r["key"].startswith("admin_")}
         if "default_slots" in settings:
             try:
                 settings["default_slots"] = json.loads(settings["default_slots"])
@@ -697,7 +945,8 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         appointment_date = body.get("appointment_date", "").strip()
         appointment_time = body.get("appointment_time", "").strip()
         patient_note = body.get("patient_note", "").strip()
-        admin_override = bool(body.get("admin_override"))
+        # Admin override only permitted if the caller has valid admin session
+        admin_override = bool(body.get("admin_override")) and self.is_admin_authenticated()
 
         if not patient_name or not patient_phone or not appointment_date or not appointment_time:
             self.send_json({"error": "請完整填寫姓名、電話、預約日期與時段"}, status=400)

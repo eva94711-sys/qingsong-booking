@@ -33,6 +33,67 @@
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
 
+  <!-- 1. 後台安全登入畫面 (未驗證時顯示) -->
+  <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4 bg-slate-900 text-slate-800">
+    <div class="max-w-md w-full bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden">
+      <!-- 品牌頂部 -->
+      <div class="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white p-6 text-center border-b border-slate-800">
+        <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-pine-600 flex items-center justify-center text-white shadow-lg shadow-pine-900/50">
+          <i data-lucide="trees" class="w-8 h-8"></i>
+        </div>
+        <h2 class="text-xl font-bold tracking-tight">青松物理治療所</h2>
+        <div class="inline-flex items-center gap-1.5 mt-2 px-3 py-0.5 rounded-full bg-pine-950/90 border border-pine-500/40 text-pine-300 text-xs font-medium">
+          <i data-lucide="shield-check" class="w-3.5 h-3.5 text-pine-400"></i>
+          <span>門診管理後台安全驗證</span>
+        </div>
+        <p class="text-xs text-slate-400 mt-2.5">系統包含病患就診資料與排班設定，請先驗證診所管理密碼</p>
+      </div>
+
+      <!-- 登入表單 -->
+      <form id="loginForm" onsubmit="handleLoginSubmit(event)" class="p-6 space-y-4">
+        <!-- 錯誤提示 -->
+        <div id="loginError" class="hidden rounded-xl bg-rose-50 border border-rose-200 text-rose-800 p-3 text-xs flex items-start gap-2">
+          <i data-lucide="alert-circle" class="w-4 h-4 text-rose-600 shrink-0 mt-0.5"></i>
+          <span id="loginErrorMsg">密碼錯誤，請重新輸入</span>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1.5">診所管理密碼</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <i data-lucide="lock" class="w-4 h-4"></i>
+            </div>
+            <input type="password" id="adminPasswordInput" required placeholder="請輸入管理密碼" autocomplete="current-password" class="w-full pl-9 pr-10 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-pine-600 focus:border-pine-600 focus:outline-none transition">
+            <button type="button" onclick="togglePasswordVisibility('adminPasswordInput', 'pwdToggleIcon')" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none">
+              <i data-lucide="eye" id="pwdToggleIcon" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between text-xs">
+          <label class="flex items-center gap-2 text-slate-600 cursor-pointer select-none">
+            <input type="checkbox" id="rememberMeCheck" checked class="w-4 h-4 rounded text-pine-600 focus:ring-pine-500 border-slate-300">
+            <span>保持登入狀態（7 天）</span>
+          </label>
+          <span class="text-[11px] text-slate-400">未勾選關閉瀏覽器即登出</span>
+        </div>
+
+        <button type="submit" id="loginSubmitBtn" class="w-full py-2.5 px-4 bg-pine-600 hover:bg-pine-700 active:bg-pine-800 text-white font-bold text-sm rounded-xl shadow-md shadow-pine-700/20 transition flex items-center justify-center gap-2">
+          <span id="loginBtnText">登入管理後台</span>
+          <i data-lucide="arrow-right" id="loginBtnIcon" class="w-4 h-4"></i>
+        </button>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+          <i data-lucide="shield" class="w-3.5 h-3.5 text-slate-400"></i>
+          <span>資安防護：防暴力破解鎖定 ‧ SHA-256 加鹽雜湊</span>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. 後台管理主系統 (驗證通過後顯示) -->
+  <div id="adminApp" class="hidden flex-1 flex flex-col">
+
   <!-- Admin Header -->
   <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-50 shadow-md">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
@@ -43,21 +104,33 @@
         <div>
           <div class="flex items-center gap-2">
             <h1 class="text-base font-bold tracking-tight">青松物理治療所</h1>
-            <span class="text-[11px] bg-pine-800 text-pine-200 border border-pine-700 px-2 py-0.5 rounded-md font-mono">管理後台 v1.0</span>
+            <span class="text-[11px] bg-pine-800 text-pine-200 border border-pine-700 px-2 py-0.5 rounded-md font-mono">管理後台</span>
+            <span class="hidden sm:inline-flex items-center gap-1 text-[11px] bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 px-2 py-0.5 rounded-md">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>已安全驗證</span>
+            </span>
           </div>
           <p class="text-xs text-slate-400">高雄市鳥松區華美路69號 · 門診排班與預約營運中心</p>
         </div>
       </div>
 
       <!-- Quick Actions -->
-      <div class="flex items-center space-x-2.5">
-        <a href="/" target="_blank" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 border border-slate-700 transition">
+      <div class="flex items-center space-x-2">
+        <a href="/" target="_blank" class="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 border border-slate-700 transition">
           <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
-          <span>開啟病患端 LIFF</span>
+          <span>開啟病患端</span>
         </a>
-        <button onclick="openNewModal()" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-pine-600 hover:bg-pine-700 text-xs font-bold text-white shadow-sm transition">
+        <button onclick="openNewModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pine-600 hover:bg-pine-700 text-xs font-bold text-white shadow-sm transition">
           <i data-lucide="plus" class="w-4 h-4"></i>
-          <span>新增預約掛號</span>
+          <span>新增預約</span>
+        </button>
+        <button onclick="openChangePasswordModal()" title="修改後台密碼" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 transition">
+          <i data-lucide="key-round" class="w-3.5 h-3.5 text-amber-400"></i>
+          <span class="hidden sm:inline">修改密碼</span>
+        </button>
+        <button onclick="logoutAdmin()" title="安全登出" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-xs text-rose-300 border border-rose-800/60 transition">
+          <i data-lucide="log-out" class="w-3.5 h-3.5 text-rose-400"></i>
+          <span>登出</span>
         </button>
       </div>
     </div>
@@ -159,10 +232,10 @@
 
         <!-- Export CSV Button -->
         <div>
-          <a href="/api/admin/export" download class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded-lg text-xs font-bold transition">
+          <button onclick="exportAppointmentsCsv()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded-lg text-xs font-bold transition">
             <i data-lucide="download" class="w-3.5 h-3.5 text-slate-600"></i>
             <span>匯出預約名冊 (CSV/Excel)</span>
-          </a>
+          </button>
         </div>
       </div>
 
@@ -564,7 +637,53 @@
     </div>
   </div>
 
+  <!-- Modal: 修改管理密碼 -->
+  <div id="changePasswordModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-pine-100 text-pine-700 flex items-center justify-center">
+            <i data-lucide="key-round" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-slate-800 text-sm">修改後台管理密碼</h3>
+            <p class="text-[11px] text-slate-500">更新診所後台管理員登入密碼</p>
+          </div>
+        </div>
+        <button onclick="closeChangePasswordModal()" class="p-1 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div id="changePwdError" class="hidden rounded-lg bg-rose-50 border border-rose-200 text-rose-800 p-2.5 text-xs"></div>
+      <div id="changePwdSuccess" class="hidden rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 p-2.5 text-xs"></div>
+
+      <form onsubmit="handleChangePasswordSubmit(event)" class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">目前密碼 *</label>
+          <input type="password" id="oldPasswordInput" required placeholder="請輸入目前的管理密碼" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-pine-600 focus:outline-none">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">新密碼 *（至少 6 碼）</label>
+          <input type="password" id="newPasswordInput" required minlength="6" placeholder="請輸入新密碼" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-pine-600 focus:outline-none">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">再次確認新密碼 *</label>
+          <input type="password" id="confirmNewPasswordInput" required minlength="6" placeholder="再次輸入新密碼確認" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-pine-600 focus:outline-none">
+        </div>
+
+        <div class="flex gap-2 pt-2 border-t">
+          <button type="button" onclick="closeChangePasswordModal()" class="w-1/3 py-2 border rounded-lg text-slate-600 font-bold hover:bg-slate-50 transition">取消</button>
+          <button type="submit" id="saveNewPwdBtn" class="w-2/3 py-2 bg-pine-600 hover:bg-pine-700 text-white font-bold rounded-lg transition shadow-sm">確認變更密碼</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  </div> <!-- /#adminApp -->
+
   <script>
+    const ADMIN_TOKEN_KEY = 'qingsong_admin_token';
     let allAppointments = [];
     let scheduleConfig = {
       standard_slots: ['09:00', '10:00', '11:00', '15:00', '16:00', '17:00', '19:00', '20:00'],
@@ -573,6 +692,252 @@
       overrides: []
     };
     let activeWeeklyTherapist = 'th_liu';
+
+    // --- Authentication & Session Handling ---
+    function getAdminToken() {
+      return sessionStorage.getItem(ADMIN_TOKEN_KEY) || localStorage.getItem(ADMIN_TOKEN_KEY);
+    }
+
+    function setAdminToken(token, remember) {
+      if (remember) {
+        localStorage.setItem(ADMIN_TOKEN_KEY, token);
+        sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+      } else {
+        sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+        localStorage.removeItem(ADMIN_TOKEN_KEY);
+      }
+    }
+
+    function clearAdminToken() {
+      sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+      localStorage.removeItem(ADMIN_TOKEN_KEY);
+    }
+
+    async function adminFetch(url, options = {}) {
+      const token = getAdminToken();
+      const headers = Object.assign({}, options.headers || {});
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+        headers['X-Admin-Token'] = token;
+      }
+      options.headers = headers;
+      options.credentials = 'same-origin';
+
+      const res = await fetch(url, options);
+      if (res.status === 401) {
+        clearAdminToken();
+        showLoginScreen('登入憑證已過期或失效，請重新輸入密碼。');
+        throw new Error('UNAUTHORIZED');
+      }
+      return res;
+    }
+
+    function showLoginScreen(errMsg) {
+      document.getElementById('adminApp').classList.add('hidden');
+      document.getElementById('loginScreen').classList.remove('hidden');
+      const errEl = document.getElementById('loginError');
+      const msgEl = document.getElementById('loginErrorMsg');
+      if (errMsg) {
+        msgEl.textContent = errMsg;
+        errEl.classList.remove('hidden');
+      } else {
+        errEl.classList.add('hidden');
+      }
+      lucide.createIcons();
+      setTimeout(() => {
+        const inp = document.getElementById('adminPasswordInput');
+        if (inp) inp.focus();
+      }, 100);
+    }
+
+    function showAdminApp() {
+      document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('adminApp').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    async function initAuth() {
+      const token = getAdminToken();
+      if (!token) {
+        showLoginScreen();
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/admin/verify', {
+          headers: { 'Authorization': `Bearer ${token}`, 'X-Admin-Token': token },
+          credentials: 'same-origin'
+        });
+        if (res.status === 200) {
+          showAdminApp();
+          initDashboard();
+        } else {
+          clearAdminToken();
+          showLoginScreen('登入狀態已過期，請重新登入。');
+        }
+      } catch (e) {
+        showLoginScreen();
+      }
+    }
+
+    async function handleLoginSubmit(e) {
+      e.preventDefault();
+      const pwdInput = document.getElementById('adminPasswordInput');
+      const password = pwdInput.value;
+      const remember = document.getElementById('rememberMeCheck').checked;
+      const errEl = document.getElementById('loginError');
+      const msgEl = document.getElementById('loginErrorMsg');
+      const submitBtn = document.getElementById('loginSubmitBtn');
+      const btnText = document.getElementById('loginBtnText');
+
+      errEl.classList.add('hidden');
+      submitBtn.disabled = true;
+      btnText.textContent = '安全驗證中...';
+
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password, remember })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          msgEl.textContent = data.error || '管理密碼錯誤，請重新輸入';
+          errEl.classList.remove('hidden');
+          pwdInput.select();
+          return;
+        }
+
+        setAdminToken(data.token, remember);
+        pwdInput.value = '';
+        showAdminApp();
+        initDashboard();
+      } catch (err) {
+        msgEl.textContent = '連線伺服器失敗，請稍後再試';
+        errEl.classList.remove('hidden');
+      } finally {
+        submitBtn.disabled = false;
+        btnText.textContent = '登入管理後台';
+        lucide.createIcons();
+      }
+    }
+
+    async function logoutAdmin() {
+      if (!confirm('確定要登出診所管理後台嗎？')) return;
+      try {
+        await adminFetch('/api/admin/logout', { method: 'POST' });
+      } catch (e) {
+        // ignore
+      }
+      clearAdminToken();
+      showLoginScreen('您已成功安全登出。');
+    }
+
+    function openChangePasswordModal() {
+      document.getElementById('oldPasswordInput').value = '';
+      document.getElementById('newPasswordInput').value = '';
+      document.getElementById('confirmNewPasswordInput').value = '';
+      document.getElementById('changePwdError').classList.add('hidden');
+      document.getElementById('changePwdSuccess').classList.add('hidden');
+      document.getElementById('changePasswordModal').classList.remove('hidden');
+      lucide.createIcons();
+      setTimeout(() => {
+        document.getElementById('oldPasswordInput').focus();
+      }, 100);
+    }
+
+    function closeChangePasswordModal() {
+      document.getElementById('changePasswordModal').classList.add('hidden');
+    }
+
+    async function handleChangePasswordSubmit(e) {
+      e.preventDefault();
+      const current_password = document.getElementById('oldPasswordInput').value;
+      const new_password = document.getElementById('newPasswordInput').value.trim();
+      const confirm_password = document.getElementById('confirmNewPasswordInput').value.trim();
+      const errBox = document.getElementById('changePwdError');
+      const succBox = document.getElementById('changePwdSuccess');
+      const saveBtn = document.getElementById('saveNewPwdBtn');
+
+      errBox.classList.add('hidden');
+      succBox.classList.add('hidden');
+
+      if (new_password.length < 6) {
+        errBox.textContent = '新密碼長度至少需 6 個字元';
+        errBox.classList.remove('hidden');
+        return;
+      }
+
+      if (new_password !== confirm_password) {
+        errBox.textContent = '兩次輸入的新密碼不一致，請再次確認';
+        errBox.classList.remove('hidden');
+        return;
+      }
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = '更新中...';
+
+      try {
+        const res = await adminFetch('/api/admin/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ current_password, new_password })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          errBox.textContent = data.error || '更新密碼失敗';
+          errBox.classList.remove('hidden');
+          return;
+        }
+
+        succBox.textContent = data.message || '管理密碼已成功更新！請妥善保管。';
+        succBox.classList.remove('hidden');
+        setTimeout(() => {
+          closeChangePasswordModal();
+        }, 1500);
+      } catch (err) {
+        if (err.message !== 'UNAUTHORIZED') {
+          errBox.textContent = '網路或伺服器異常，請稍後再試';
+          errBox.classList.remove('hidden');
+        }
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '確認變更密碼';
+      }
+    }
+
+    function togglePasswordVisibility(inputId, iconId) {
+      const input = document.getElementById(inputId);
+      const icon = document.getElementById(iconId);
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.setAttribute('data-lucide', 'eye-off');
+      } else {
+        input.type = 'password';
+        icon.setAttribute('data-lucide', 'eye');
+      }
+      lucide.createIcons();
+    }
+
+    async function exportAppointmentsCsv() {
+      try {
+        const res = await adminFetch('/api/admin/export');
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const nowStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        a.download = `qingsong_appointments_${nowStr}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (e) {
+        if (e.message !== 'UNAUTHORIZED') {
+          alert('匯出 CSV 失敗，請重試');
+        }
+      }
+    }
 
     function formatLocalDate(dateObj) {
       const y = dateObj.getFullYear();
@@ -583,6 +948,10 @@
 
     document.addEventListener('DOMContentLoaded', () => {
       lucide.createIcons();
+      initAuth();
+    });
+
+    function initDashboard() {
       loadStats();
       loadAppointments();
       loadScheduleConfig();
@@ -590,9 +959,11 @@
       const today = new Date();
       const tomorrow = new Date(today);
       tomorrow.setDate(today.getDate() + 1);
-      document.getElementById('manualDate').value = formatLocalDate(tomorrow);
-      document.getElementById('overrideDate').value = formatLocalDate(tomorrow);
-    });
+      const manualDateEl = document.getElementById('manualDate');
+      const overrideDateEl = document.getElementById('overrideDate');
+      if (manualDateEl) manualDateEl.value = formatLocalDate(tomorrow);
+      if (overrideDateEl) overrideDateEl.value = formatLocalDate(tomorrow);
+    }
 
     function switchAdminTab(tabId) {
       ['appointments', 'reminders', 'schedules'].forEach(t => {
@@ -616,7 +987,7 @@
 
     async function loadStats() {
       try {
-        const res = await fetch('/api/admin/stats');
+        const res = await adminFetch('/api/admin/stats');
         const data = await res.json();
         document.getElementById('statTotal').textContent = data.total_active || 0;
         document.getElementById('statToday').textContent = data.today_count || 0;
@@ -675,7 +1046,7 @@
       tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">正在查詢資料...</td></tr>';
 
       try {
-        const res = await fetch(url);
+        const res = await adminFetch(url);
         allAppointments = await res.json();
 
         if (allAppointments.length === 0) {
@@ -758,7 +1129,7 @@
     async function updateAptStatus(aptId, status) {
       if (status === 'CANCELLED' && !confirm('確定要取消此筆預約並釋放時段嗎？')) return;
       try {
-        await fetch(`/api/admin/appointments/${aptId}/status`, {
+        await adminFetch(`/api/admin/appointments/${aptId}/status`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status })
@@ -766,7 +1137,7 @@
         loadAppointments();
         loadStats();
       } catch (e) {
-        alert('狀態更新失敗');
+        if (e.message !== 'UNAUTHORIZED') alert('狀態更新失敗');
       }
     }
 
@@ -777,7 +1148,7 @@
       lucide.createIcons();
 
       try {
-        const res = await fetch('/api/reminders/check-and-send', {
+        const res = await adminFetch('/api/reminders/check-and-send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({})
@@ -801,7 +1172,7 @@
 
     async function simulateLinePostback(action) {
       try {
-        const res = await fetch('/api/line/webhook', {
+        const res = await adminFetch('/api/line/webhook', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -844,7 +1215,7 @@
       }
 
       try {
-        const res = await fetch('/api/appointments', {
+        const res = await adminFetch('/api/appointments', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -876,7 +1247,7 @@
     // --- 治療師排班與時段控管 ---
     async function loadScheduleConfig() {
       try {
-        const res = await fetch('/api/admin/schedule-config');
+        const res = await adminFetch('/api/admin/schedule-config');
         const data = await res.json();
         scheduleConfig = data;
 
@@ -910,7 +1281,7 @@
       const minAdv = parseInt(document.getElementById('ruleMinAdvanceHours').value, 10);
       const maxActive = parseInt(document.getElementById('ruleMaxActiveBookings').value, 10);
       try {
-        const res = await fetch('/api/admin/booking-rules', {
+        const res = await adminFetch('/api/admin/booking-rules', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -997,7 +1368,7 @@
       }
 
       try {
-        const res = await fetch('/api/admin/schedule-overrides', {
+        const res = await adminFetch('/api/admin/schedule-overrides', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1018,14 +1389,14 @@
         alert('排班異動已儲存！病患端可預約日期與時段已同步更新。');
         loadScheduleConfig();
       } catch (e) {
-        alert('儲存排班異動失敗');
+        if (e.message !== 'UNAUTHORIZED') alert('儲存排班異動失敗');
       }
     }
 
     async function deleteScheduleOverride(ovId) {
       if (!confirm('確定要刪除此筆排班異動並恢復常態班表嗎？')) return;
       try {
-        const res = await fetch(`/api/admin/schedule-overrides/${encodeURIComponent(ovId)}/delete`, {
+        const res = await adminFetch(`/api/admin/schedule-overrides/${encodeURIComponent(ovId)}/delete`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({})
@@ -1222,7 +1593,7 @@
     async function saveWeeklySchedule() {
       const schedule = scheduleConfig.weekly_schedules[activeWeeklyTherapist];
       try {
-        const res = await fetch('/api/admin/weekly-schedule', {
+        const res = await adminFetch('/api/admin/weekly-schedule', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1238,7 +1609,7 @@
         alert('常態班表已儲存！病患端可預約時段已同步更新。');
         loadScheduleConfig();
       } catch (e) {
-        alert('儲存常態班表失敗');
+        if (e.message !== 'UNAUTHORIZED') alert('儲存常態班表失敗');
       }
     }
 
@@ -1288,7 +1659,7 @@
 
     async function saveDefaultSlots() {
       try {
-        const res = await fetch('/api/admin/default-slots', {
+        const res = await adminFetch('/api/admin/default-slots', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slots: scheduleConfig.standard_slots })
@@ -1301,7 +1672,7 @@
         alert('全所標準時段已更新！');
         loadScheduleConfig();
       } catch (e) {
-        alert('儲存標準時段失敗');
+        if (e.message !== 'UNAUTHORIZED') alert('儲存標準時段失敗');
       }
     }
   </script>

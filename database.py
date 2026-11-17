@@ -3,6 +3,8 @@ import os
 import json
 import ssl
 import urllib.parse
+import hashlib
+import secrets
 from datetime import datetime, timedelta
 
 try:
@@ -240,6 +242,15 @@ def init_db():
     );
     """)
 
+    # 7. Admin Sessions Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS admin_sessions (
+        token TEXT PRIMARY KEY,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    );
+    """)
+
     conn.commit()
     seed_data(cursor)
     conn.commit()
@@ -351,6 +362,14 @@ def seed_data(cursor):
             "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO NOTHING",
             (k, v)
         )
+
+    # Initialize default admin password if not set
+    cursor.execute("SELECT value FROM settings WHERE key = 'admin_password_hash'")
+    if not cursor.fetchone():
+        salt = secrets.token_hex(16)
+        pwd_hash = hashlib.sha256((salt + "557fabgw").encode("utf-8")).hexdigest()
+        cursor.execute("INSERT INTO settings (key, value) VALUES ('admin_password_salt', ?) ON CONFLICT (key) DO NOTHING", (salt,))
+        cursor.execute("INSERT INTO settings (key, value) VALUES ('admin_password_hash', ?) ON CONFLICT (key) DO NOTHING", (pwd_hash,))
 
 
 if __name__ == "__main__":
