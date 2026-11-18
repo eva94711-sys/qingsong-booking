@@ -443,7 +443,15 @@
               <p class="text-[11px] text-slate-400 mt-0.5">限制病患線上可預約的最遠日期。治療師預排好下月行程後，可一鍵釋出次月整月時段。</p>
             </div>
           </div>
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="button" onclick="scrollToScheduleOverrides()" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="calendar-off" class="w-4 h-4 text-rose-600"></i>
+              <span>設定休診/請假 ↓</span>
+            </button>
+            <button type="button" onclick="scrollToWeeklySchedule()" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="clock" class="w-4 h-4 text-pine-700"></i>
+              <span>每週固定班表 ↓</span>
+            </button>
             <button type="button" onclick="openBookingWindowReleaseModal()" class="px-3.5 py-2 rounded-xl bg-pine-700 hover:bg-pine-800 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95">
               <i data-lucide="calendar-plus" class="w-4 h-4"></i>
               <span id="btnLabelReleaseNextMonth">審核並釋出次月預約</span>
@@ -509,7 +517,7 @@
       </div>
 
       <!-- 區塊一：特定日期休診／請假／臨時時段調整 -->
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <div id="sectionScheduleOverrides" class="grid grid-cols-1 lg:grid-cols-12 gap-5 scroll-mt-24">
         <!-- 新增異動表單 -->
         <div class="lg:col-span-5 bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
           <div>
@@ -610,7 +618,7 @@
       </div>
 
       <!-- 區塊二：治療師每週常態固定班表 -->
-      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
+      <div id="sectionWeeklySchedule" class="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4 scroll-mt-24">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -928,14 +936,20 @@
       </div>
 
       <!-- Action buttons -->
-      <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
-        <button type="button" onclick="closeBookingWindowReleaseModal()" class="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
-          取消返回
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-3 border-t border-slate-100">
+        <button type="button" onclick="closeBookingWindowReleaseModal(); scrollToScheduleOverrides();" class="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer">
+          <i data-lucide="calendar-off" class="w-4 h-4 text-rose-600"></i>
+          <span>先去設定休診/請假 ↓</span>
         </button>
-        <button type="button" id="btnConfirmReleaseWindow" onclick="confirmReleaseBookingWindow()" class="px-5 py-2 bg-pine-700 hover:bg-pine-800 text-white rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95">
-          <i data-lucide="check" class="w-4 h-4"></i>
-          <span>確認排班無誤，立即釋出</span>
-        </button>
+        <div class="flex items-center justify-end gap-2">
+          <button type="button" onclick="closeBookingWindowReleaseModal()" class="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
+            取消返回
+          </button>
+          <button type="button" id="btnConfirmReleaseWindow" onclick="confirmReleaseBookingWindow()" class="px-5 py-2 bg-pine-700 hover:bg-pine-800 text-white rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95">
+            <i data-lucide="check" class="w-4 h-4"></i>
+            <span>確認排班無誤，立即釋出</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -1628,6 +1642,22 @@
       } catch (err) {
         alert('儲存失敗，請重試');
       }
+    }
+
+    function scrollToScheduleOverrides() {
+      switchAdminTab('schedules');
+      setTimeout(() => {
+        const el = document.getElementById('sectionScheduleOverrides');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
+    }
+
+    function scrollToWeeklySchedule() {
+      switchAdminTab('schedules');
+      setTimeout(() => {
+        const el = document.getElementById('sectionWeeklySchedule');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
     }
 
     // ==========================================
