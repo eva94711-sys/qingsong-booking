@@ -147,46 +147,41 @@
           <p class="text-xs text-pine-700 font-bold">門診線上掛號與就診照護系統</p>
         </div>
 
-        <!-- Explanation card -->
-        <div class="p-4 bg-emerald-50/80 border border-emerald-200/90 rounded-2xl text-left space-y-2 text-xs leading-relaxed text-slate-700">
-          <div class="font-bold text-emerald-900 flex items-center gap-1.5">
-            <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600 flex-shrink-0"></i>
-            <span>LINE 實名掛號 ＆ 前一日自動提醒</span>
-          </div>
-          <p>
-            為確保每位病友都能順利收到<strong>看診前一日下午 17:00 的出席確認推播</strong>、預約憑證與就診注意事項，本系統採 LINE 實名預約。
-          </p>
-          <p class="text-slate-500 text-[11px]">
-            ※ 首次填寫後，系統將自動為您記憶姓名與手機，下次預約 3 秒完成！
-          </p>
-        </div>
-
-        <!-- Action Button -->
-        <div class="space-y-3 pt-1">
+        <!-- LINE Login (Primary) -->
+        <div class="space-y-2">
           <button type="button" onclick="loginWithLine()" class="w-full py-3.5 bg-[#06C755] hover:bg-[#05b34c] active:bg-[#049b42] text-white font-bold rounded-2xl text-sm md:text-base shadow-lg hover:shadow-xl transition flex items-center justify-center gap-2 cursor-pointer">
             <i data-lucide="message-circle" class="w-5 h-5"></i>
-            <span>使用 LINE 帳號一鍵登入預約</span>
+            <span>使用 LINE 帳號登入預約</span>
           </button>
+          <p class="text-[10px] text-slate-400">登入後可收到看診前一日自動提醒推播</p>
+        </div>
 
-          <!-- Demo / Guest access for therapists to test before LINE channel is published -->
-          <button type="button" onclick="enterGuestMode()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 font-semibold rounded-2xl text-xs transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200">
-            <i data-lucide="eye" class="w-3.5 h-3.5"></i>
-            <span>訪客體驗模式（瀏覽系統功能）</span>
-          </button>
+        <!-- Divider -->
+        <div class="flex items-center gap-2">
+          <div class="flex-1 h-px bg-slate-200"></div>
+          <span class="text-[11px] text-slate-400 font-medium">或</span>
+          <div class="flex-1 h-px bg-slate-200"></div>
+        </div>
 
-          <!-- Elderly / Phone reservation fallback -->
-          <div class="pt-3 border-t border-slate-100 space-y-1.5">
-            <p class="text-[11px] text-slate-400">長輩或無 LINE 帳號之病友？</p>
-            <a href="tel:077353353" class="inline-flex items-center justify-center gap-1.5 w-full py-2.5 px-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
-              <i data-lucide="phone-call" class="w-3.5 h-3.5 text-pine-700"></i>
-              <span>電話預約專線：07-7353353</span>
-            </a>
+        <!-- Phone / Name login (fallback - works without LINE) -->
+        <div class="space-y-3">
+          <p class="text-xs text-slate-600 font-semibold text-left">📱 直接輸入姓名＆手機號碼預約</p>
+          <div class="space-y-2">
+            <input type="text" id="guestNameInput" placeholder="您的姓名（例：王小明）" maxlength="20"
+              class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pine-400 focus:border-transparent bg-slate-50" />
+            <input type="tel" id="guestPhoneInput" placeholder="手機號碼（例：0912345678）" maxlength="10" pattern="09[0-9]{8}"
+              class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pine-400 focus:border-transparent bg-slate-50" />
           </div>
+          <button type="button" onclick="loginWithPhone()" class="w-full py-3 bg-pine-800 hover:bg-pine-900 text-white font-bold rounded-2xl text-sm transition flex items-center justify-center gap-2 cursor-pointer shadow-md">
+            <i data-lucide="log-in" class="w-4 h-4"></i>
+            <span>進入預約系統</span>
+          </button>
+          <p class="text-[10px] text-slate-400">無須 LINE 帳號，輸入姓名手機即可預約</p>
         </div>
 
         <!-- Clinic Address Footer -->
-        <p class="text-[11px] text-slate-400 pt-1">
-          高雄市鳥松區華美路69號 · 全預約制門診
+        <p class="text-[11px] text-slate-400 pt-1 border-t border-slate-100">
+          高雄市鳥松區華美路69號 · 電話：07-7353353
         </p>
       </div>
     </div>
@@ -230,11 +225,11 @@
 
     <!-- Main Content Container -->
     <main id="appMainContent" class="flex-1 p-4 md:p-8 overflow-y-auto">
-      <!-- 訪客模式提示 banner -->
-      <div id="guestModeBanner" class="hidden mb-4 p-3 bg-amber-50 border border-amber-300 rounded-2xl flex items-start gap-2 text-xs text-amber-800">
-        <i data-lucide="eye" class="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5"></i>
+      <!-- 手機登入提示 banner（手機號碼登入者顯示） -->
+      <div id="guestModeBanner" class="hidden mb-4 p-3 bg-blue-50 border border-blue-200 rounded-2xl flex items-start gap-2 text-xs text-blue-800">
+        <i data-lucide="smartphone" class="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5"></i>
         <div>
-          <span class="font-bold">訪客體驗模式：</span>您正以訪客身分瀏覽系統，預約功能為體驗示範用途。正式使用請<button onclick="showLoginGate()" class="font-bold underline text-amber-900">點此以 LINE 帳號登入</button>。
+          <span class="font-bold">手機號碼登入中</span>：預約成功後請記得留意診所電話通知。如需 LINE 推播提醒，可<button onclick="logoutAndShowLogin()" class="font-bold underline text-blue-900">切換回 LINE 登入</button>。
         </div>
       </div>
 
@@ -1304,7 +1299,27 @@ async function initLiff() {
     } catch (e) {}
   }
 
-  // 未登入 LINE（一般網頁訪客 / 外部瀏覽器開啟）：顯示全站登入守門員
+  // 檢查是否有手機號碼登入的記憶（上次曾用手機登入）
+  const phoneUser = localStorage.getItem('qingsong_phone_user');
+  if (phoneUser) {
+    try {
+      const parsed = JSON.parse(phoneUser);
+      if (parsed && parsed.userId && parsed.displayName && parsed.phone) {
+        currentLineUser = parsed;
+        // 預填登入頁的姓名手機欄位，讓使用者確認後一鍵進入
+        const nameInput = document.getElementById('guestNameInput');
+        const phoneInput = document.getElementById('guestPhoneInput');
+        if (nameInput) nameInput.value = parsed.displayName;
+        if (phoneInput) phoneInput.value = parsed.phone;
+        // 若記憶有效，直接自動登入
+        updateUserUI();
+        unlockApp();
+        return;
+      }
+    } catch (e) {}
+  }
+
+  // 未登入（一般網頁訪客 / 外部瀏覽器開啟）：顯示全站登入守門員
   showLoginGate();
 }
 
@@ -1387,6 +1402,64 @@ function enterGuestMode() {
   if (banner) banner.classList.remove('hidden');
   updateUserUI();
   unlockApp();
+}
+
+function logoutAndShowLogin() {
+  // 清除手機登入記憶，回到登入頁
+  try { localStorage.removeItem('qingsong_phone_user'); } catch(e) {}
+  try { localStorage.removeItem('qingsong_test_user'); } catch(e) {}
+  currentLineUser = { userId: '', displayName: '', pictureUrl: '' };
+  const banner = document.getElementById('guestModeBanner');
+  if (banner) banner.classList.add('hidden');
+  showLoginGate();
+}
+
+function loginWithPhone() {
+  const nameInput = document.getElementById('guestNameInput');
+  const phoneInput = document.getElementById('guestPhoneInput');
+  const name = (nameInput ? nameInput.value.trim() : '');
+  const phone = (phoneInput ? phoneInput.value.trim() : '');
+
+  if (!name) {
+    nameInput && nameInput.focus();
+    nameInput && (nameInput.style.borderColor = '#ef4444');
+    setTimeout(() => { if (nameInput) nameInput.style.borderColor = ''; }, 2000);
+    alert('請輸入您的姓名！');
+    return;
+  }
+  if (!phone || !/^09\d{8}$/.test(phone)) {
+    phoneInput && phoneInput.focus();
+    phoneInput && (phoneInput.style.borderColor = '#ef4444');
+    setTimeout(() => { if (phoneInput) phoneInput.style.borderColor = ''; }, 2000);
+    alert('請輸入正確的手機號碼（09 開頭共 10 碼）！');
+    return;
+  }
+
+  // 以手機號碼為唯一識別，產生穩定的假 userId
+  const phoneUserId = 'U_PHONE_' + phone;
+  currentLineUser = {
+    userId: phoneUserId,
+    displayName: name,
+    phone: phone,
+    pictureUrl: '',
+    isPhoneLogin: true
+  };
+
+  // 記憶到 localStorage，下次直接免填
+  try {
+    localStorage.setItem('qingsong_phone_user', JSON.stringify({ userId: phoneUserId, displayName: name, phone: phone, isPhoneLogin: true }));
+  } catch(e) {}
+
+  updateUserUI();
+  unlockApp();
+
+  // 預填病患資料表單
+  setTimeout(() => {
+    const pName = document.getElementById('patientName');
+    const pPhone = document.getElementById('patientPhone');
+    if (pName && !pName.value) pName.value = name;
+    if (pPhone && !pPhone.value) pPhone.value = phone;
+  }, 500);
 }
 
 function showLoginGate() {
