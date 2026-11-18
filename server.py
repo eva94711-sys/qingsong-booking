@@ -238,6 +238,8 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.api_admin_get_stats()
         elif path == "/api/admin/schedule-config":
             self.api_admin_get_schedule_config()
+        elif path == "/api/admin/booking-window":
+            self.api_admin_get_booking_window()
         elif path == "/api/admin/quick-lock/status":
             self.api_admin_get_quick_lock_status(query)
         elif path == "/api/admin/export":
@@ -289,6 +291,8 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.api_admin_update_default_slots(body)
         elif path == "/api/admin/booking-rules":
             self.api_admin_update_booking_rules(body)
+        elif path == "/api/admin/booking-window":
+            self.api_admin_update_booking_window(body)
         elif path == "/api/admin/line-config":
             self.api_admin_update_line_config(body)
         elif path == "/api/admin/quick-lock/toggle":
@@ -623,6 +627,30 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             max_active = 2
         return {"min_advance_hours": min_advance, "max_active_bookings": max_active}
 
+    def get_booking_open_until_date(self, cursor=None):
+        should_close = False
+        if cursor is None:
+            conn = database.get_connection()
+            cursor = conn.cursor()
+            should_close = True
+        try:
+            cursor.execute("SELECT value FROM settings WHERE key = 'booking_open_until_date'")
+            row = cursor.fetchone()
+            if row:
+                val = str(row["value"] or "").strip()
+                if val:
+                    return val
+            # Default fallback: end of current month in Taiwan time
+            now_tw = taiwan_now().date()
+            year = now_tw.year + (now_tw.month // 12)
+            month = (now_tw.month % 12) + 1
+            first_of_next = datetime(year, month, 1).date()
+            end_of_month = (first_of_next - timedelta(days=1)).strftime("%Y-%m-%d")
+            return end_of_month
+        finally:
+            if should_close:
+                conn.close()
+
     def apply_advance_cutoff(self, date_str, raw_slots, min_advance_hours, now_tw=None):
         now_tw = now_tw or taiwan_now()
         cutoff_dt = now_tw + timedelta(hours=min_advance_hours)
@@ -721,7 +749,10 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         now_tw = taiwan_now()
         start_date = now_tw.strftime("%Y-%m-%d")
         end_date = (now_tw + timedelta(days=days - 1)).strftime("%Y-%m-%d")
-        cache_key = ("summary", therapist_id, days, start_date)
+        open_until_date = self.get_booking_open_until_date()
+        if end_date > open_until_date:
+            end_date = open_until_date
+        cache_key = ("summary", therapist_id, days, start_date, open_until_date)
 
         with _CACHE_LOCK:
             cached = _SCHEDULE_CACHE.get(cache_key)
@@ -739,13 +770,21 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
                         "is_past_cutoff": (not item["is_closed"]) and item["open_count"] > 0 and avail_cnt == 0 and all(s.get("too_late") or not s["available"] for s in f_slots) and any(s.get("too_late") for s in f_slots),
                         "slots": f_slots
                     })
-                self.send_json({"therapist_id": therapist_id, "booking_rules": rules, "days": dynamic_days})
+                self.send_json({
+                    "therapist_id": therapist_id,
+                    "booking_rules": rules,
+                    "open_until_date": open_until_date,
+                    "days": dynamic_days
+                })
                 return
 
         conn = database.get_connection()
         cursor = conn.cursor()
         standard_slots, weekly_schedules, active_therapists = self.get_clinic_schedule_config(cursor)
         booking_rules = self.get_booking_rules(cursor)
+        open_until_date = self.get_booking_open_until_date(cursor)
+        if end_date > open_until_date:
+            end_date = open_until_date
 
         cursor.execute("""
             SELECT therapist_id, date, time_slot, is_available, reason
@@ -771,6 +810,8 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         for i in range(days):
             d_obj = now_tw + timedelta(days=i)
             d_str = d_obj.strftime("%Y-%m-%d")
+            if d_str > open_until_date:
+                break
             day_ovs = ov_by_date.get(d_str, [])
             day_booked = booked_by_date.get(d_str, set())
 
@@ -856,7 +897,12 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "is_past_cutoff": (not item["is_closed"]) and item["open_count"] > 0 and avail_cnt == 0 and any(s.get("too_late") for s in f_slots),
                 "slots": f_slots
             })
-        self.send_json({"therapist_id": therapist_id, "booking_rules": booking_rules, "days": dynamic_days})
+        self.send_json({
+            "therapist_id": therapist_id,
+            "booking_rules": booking_rules,
+            "open_until_date": open_until_date,
+            "days": dynamic_days
+        })
 
     def api_get_slots(self, query):
         target_date = query.get("date", [""])[0]
@@ -891,6 +937,18 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         standard_slots, weekly_schedules, all_therapists = self.get_clinic_schedule_config(cursor)
         booking_rules = self.get_booking_rules(cursor)
+        open_until_date = self.get_booking_open_until_date(cursor)
+
+        if target_date > open_until_date:
+            conn.close()
+            self.send_json({
+                "date": target_date,
+                "is_closed": True,
+                "reason": f"尚未開放線上預約（目前開放至 {open_until_date}）",
+                "open_until_date": open_until_date,
+                "slots": []
+            })
+            return
 
         cursor.execute("""
             SELECT therapist_id, date, time_slot, is_available, reason
@@ -1020,6 +1078,14 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             now_tw = taiwan_now()
 
             if not admin_override:
+                open_until_date = self.get_booking_open_until_date(cursor)
+                if appointment_date > open_until_date:
+                    conn.rollback()
+                    self.send_json({
+                        "error": f"該看診日期尚未開放線上預約。本所目前開放掛號至 {open_until_date}，次月行程確認後將即時釋出。"
+                    }, status=400)
+                    return
+
                 min_adv = booking_rules["min_advance_hours"]
                 if slot_dt < now_tw + timedelta(hours=min_adv):
                     conn.rollback()
@@ -1732,6 +1798,126 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             conn.rollback()
             self.send_json({"error": f"更新預約規則失敗: {str(e)}"}, status=500)
+        finally:
+            conn.close()
+
+    def api_admin_get_booking_window(self):
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        try:
+            open_until_date = self.get_booking_open_until_date(cursor)
+            now_tw = taiwan_now()
+            today_date = now_tw.date()
+            today_str = today_date.strftime("%Y-%m-%d")
+
+            open_date_obj = datetime.strptime(open_until_date, "%Y-%m-%d").date()
+            days_remaining = max(0, (open_date_obj - today_date).days)
+
+            # Next month calculation
+            next_m_year = today_date.year + (today_date.month // 12)
+            next_m_month = (today_date.month % 12) + 1
+            next_month_start = datetime(next_m_year, next_m_month, 1).date()
+
+            after_next_year = next_m_year + (next_m_month // 12)
+            after_next_month = (next_m_month % 12) + 1
+            after_next_start = datetime(after_next_year, after_next_month, 1).date()
+            next_month_end = after_next_start - timedelta(days=1)
+
+            next_month_start_str = next_month_start.strftime("%Y-%m-%d")
+            next_month_end_str = next_month_end.strftime("%Y-%m-%d")
+            next_month_label = f"{next_m_year}年{next_m_month}月"
+
+            needs_reminder = (days_remaining <= 10) or (today_date.day >= 20 and open_until_date < next_month_end_str)
+
+            cursor.execute("""
+                SELECT therapist_id, date, time_slot, is_available, reason
+                FROM schedule_overrides
+                WHERE date >= ? AND date <= ?
+            """, (next_month_start_str, next_month_end_str))
+            next_overrides = cursor.fetchall()
+
+            cur_d = next_month_start
+            total_weekdays = 0
+            while cur_d <= next_month_end:
+                if cur_d.weekday() < 5:
+                    total_weekdays += 1
+                cur_d += timedelta(days=1)
+
+            def get_therapist_preview(tid, name):
+                t_ovs = [o for o in next_overrides if o["therapist_id"] in (tid, "all")]
+                off_dates = set()
+                reasons = []
+                for o in t_ovs:
+                    if o["is_available"] == 0:
+                        off_dates.add(o["date"])
+                        r_text = f"{o['date']} ({o.get('reason') or '休診'})"
+                        if r_text not in reasons:
+                            reasons.append(r_text)
+                return {
+                    "name": name,
+                    "weekly_schedule": "每週一至週五常態看診 (週六日休診)",
+                    "total_work_days": total_weekdays,
+                    "off_days_count": len(off_dates),
+                    "reasons": sorted(reasons)
+                }
+
+            preview = {
+                "next_month_label": next_month_label,
+                "start_date": next_month_start_str,
+                "end_date": next_month_end_str,
+                "total_calendar_days": (next_month_end - next_month_start).days + 1,
+                "total_work_days": total_weekdays,
+                "th_liu": get_therapist_preview("th_liu", "劉韋綸 院長"),
+                "th_hong": get_therapist_preview("th_hong", "洪嘉良 物理治療師")
+            }
+
+            self.send_json({
+                "today": today_str,
+                "open_until_date": open_until_date,
+                "days_remaining": days_remaining,
+                "needs_reminder": needs_reminder,
+                "next_month_start": next_month_start_str,
+                "next_month_end": next_month_end_str,
+                "next_month_label": next_month_label,
+                "preview": preview
+            })
+        finally:
+            conn.close()
+
+    def api_admin_update_booking_window(self, body):
+        open_until_date = (body.get("open_until_date") or "").strip()
+        if not open_until_date:
+            self.send_json({"error": "請提供欲開放預約之截止日期"}, status=400)
+            return
+
+        try:
+            target_date = datetime.strptime(open_until_date, "%Y-%m-%d").date()
+        except ValueError:
+            self.send_json({"error": "日期格式錯誤，請使用 YYYY-MM-DD"}, status=400)
+            return
+
+        now_tw = taiwan_now().date()
+        if target_date < now_tw:
+            self.send_json({"error": "開放預約截止日不可早於今日"}, status=400)
+            return
+
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO settings (key, value) VALUES ('booking_open_until_date', ?)
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+            """, (open_until_date,))
+            conn.commit()
+            invalidate_schedule_cache()
+            self.send_json({
+                "success": True,
+                "open_until_date": open_until_date,
+                "message": f"成功釋放開放預約至 {open_until_date}！病患端已同步開放掛號。"
+            })
+        except Exception as e:
+            conn.rollback()
+            self.send_json({"error": f"更新開放預約截止日失敗: {str(e)}"}, status=500)
         finally:
             conn.close()
 

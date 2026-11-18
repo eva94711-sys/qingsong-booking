@@ -201,6 +201,28 @@
     <!-- TAB 1: 預約名冊與日程 -->
     <div id="adminTab-appointments" class="space-y-4">
       
+      <!-- 🔔 次月預約待確認釋出提醒橫幅 -->
+      <div id="bannerBookingWindowReminder" class="hidden bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <span class="p-2.5 rounded-xl bg-amber-500 text-white shrink-0 shadow-xs">
+            <i data-lucide="bell-ring" class="w-5 h-5 animate-bounce"></i>
+          </span>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-black text-sm text-amber-950">🔔 次月看診行程待確認釋出</span>
+              <span id="badgeDaysRemaining" class="text-[11px] font-bold bg-amber-200 text-amber-900 px-2.5 py-0.5 rounded-full font-mono">剩餘 -- 天</span>
+            </div>
+            <p class="text-xs text-amber-800 mt-0.5" id="textBookingWindowReminder">
+              目前病患僅能預約至 <span class="font-bold underline" id="reminderCurrentDate">--</span>。請確認下月份排班後，一鍵釋出次月預約供病患掛號。
+            </p>
+          </div>
+        </div>
+        <button type="button" onclick="openBookingWindowReleaseModal()" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-xs transition flex items-center justify-center gap-1.5 shrink-0 cursor-pointer active:scale-95">
+          <i data-lucide="calendar-check" class="w-4 h-4"></i>
+          <span>立即審核並釋出次月</span>
+        </button>
+      </div>
+
       <!-- ⚡ 即時看診時段開關看板 (當日/明日一鍵快速鎖定防插單) -->
       <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
@@ -405,6 +427,61 @@
 
     <!-- TAB 3: 治療師排班與時段 -->
     <div id="adminTab-schedules" class="hidden space-y-5">
+
+      <!-- 📅 預約開放區間與次月釋出控管 -->
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2">
+            <span class="p-2 rounded-xl bg-pine-100 text-pine-800">
+              <i data-lucide="calendar-range" class="w-5 h-5"></i>
+            </span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="font-bold text-sm text-slate-900">預約開放區間與次月釋出控管</h3>
+                <span id="badgeScheduleWindowStatus" class="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full font-bold">🟢 線上開放中</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-0.5">限制病患線上可預約的最遠日期。治療師預排好下月行程後，可一鍵釋出次月整月時段。</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="openBookingWindowReleaseModal()" class="px-3.5 py-2 rounded-xl bg-pine-700 hover:bg-pine-800 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95">
+              <i data-lucide="calendar-plus" class="w-4 h-4"></i>
+              <span id="btnLabelReleaseNextMonth">審核並釋出次月預約</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <!-- 目前開放截止日卡片 -->
+          <div class="p-3.5 rounded-xl border border-slate-100 bg-slate-50 flex flex-col justify-between">
+            <span class="text-xs text-slate-500 font-medium">目前病患可預約至</span>
+            <div class="flex items-baseline gap-1.5 mt-1">
+              <span id="infoCurrentOpenUntil" class="text-xl font-black text-pine-900">--</span>
+              <span id="infoDaysRemaining" class="text-[11px] font-bold text-slate-500">(剩餘 -- 天)</span>
+            </div>
+          </div>
+
+          <!-- 次月目標月份 -->
+          <div class="p-3.5 rounded-xl border border-slate-100 bg-slate-50 flex flex-col justify-between">
+            <span class="text-xs text-slate-500 font-medium">次月份目標</span>
+            <div class="flex items-baseline gap-1.5 mt-1">
+              <span id="infoNextMonthLabel" class="text-xl font-black text-slate-800">--</span>
+              <span id="infoNextMonthRange" class="text-[11px] text-slate-400">(-- 至 --)</span>
+            </div>
+          </div>
+
+          <!-- 自訂截止日 -->
+          <div class="p-3.5 rounded-xl border border-slate-100 bg-slate-50 flex flex-col justify-between">
+            <span class="text-xs text-slate-500 font-medium">手動自訂開放截止日</span>
+            <div class="flex items-center gap-2 mt-1">
+              <input type="date" id="inputCustomOpenUntil" class="px-2 py-1 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-pine-600 focus:outline-none flex-1 font-medium">
+              <button type="button" onclick="submitCustomBookingWindow()" class="px-2.5 py-1 text-xs font-bold text-pine-800 bg-pine-100 hover:bg-pine-200 border border-pine-300 rounded-lg transition cursor-pointer">
+                儲存
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- 兩位治療師狀態卡片 -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -786,6 +863,79 @@
       <div class="flex space-x-2 pt-2 border-t">
         <button onclick="closeNewModal()" class="w-1/3 py-2 border rounded-lg text-slate-600 font-bold hover:bg-slate-50 transition text-xs">取消</button>
         <button onclick="submitManualAppointment()" class="w-2/3 py-2 bg-pine-700 hover:bg-pine-800 text-white font-bold rounded-lg transition text-xs shadow-sm">送出新增</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: 審核並釋出次月預約 -->
+  <div id="modalBookingWindowRelease" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="p-1.5 rounded-xl bg-pine-100 text-pine-800">
+            <i data-lucide="calendar-check" class="w-5 h-5"></i>
+          </span>
+          <h3 class="font-bold text-base text-slate-900" id="modalReleaseTitle">
+            審核並釋出次月看診預約
+          </h3>
+        </div>
+        <button type="button" onclick="closeBookingWindowReleaseModal()" class="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 cursor-pointer">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- 審核摘要內容 -->
+      <div class="space-y-3.5 text-xs">
+        <div class="bg-pine-50 border border-pine-200 rounded-xl p-3.5 space-y-1.5">
+          <div class="flex items-center justify-between font-bold text-pine-950">
+            <span>📅 預計開放預約區間：</span>
+            <span id="modalPreviewDateRange" class="text-pine-800 text-sm font-extrabold">-- 至 --</span>
+          </div>
+          <div class="text-[11px] text-pine-700 flex items-center justify-between">
+            <span>包含自然日天數：<strong id="modalPreviewCalendarDays">--</strong> 天</span>
+            <span>看診工作日 (週一至五)：<strong id="modalPreviewWorkDays">--</strong> 天</span>
+          </div>
+        </div>
+
+        <div class="border border-slate-200 rounded-xl p-3.5 space-y-2 bg-slate-50/50">
+          <div class="font-bold text-slate-800 flex items-center gap-1.5">
+            <i data-lucide="clipboard-check" class="w-4 h-4 text-pine-700"></i>
+            <span>治療師門診排班與請假審核檢視：</span>
+          </div>
+
+          <!-- 劉院長 -->
+          <div class="p-2.5 rounded-lg bg-white border border-slate-200 space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-900">劉韋綸 院長</span>
+              <span id="modalPreviewLiuStatus" class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">常態全開</span>
+            </div>
+            <div class="text-[11px] text-slate-500" id="modalPreviewLiuDesc">每週一至五常態門診（週六日休診）</div>
+          </div>
+
+          <!-- 洪治療師 -->
+          <div class="p-2.5 rounded-lg bg-white border border-slate-200 space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-900">洪嘉良 物理治療師</span>
+              <span id="modalPreviewHongStatus" class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">常態全開</span>
+            </div>
+            <div class="text-[11px] text-slate-500" id="modalPreviewHongDesc">每週一至五常態門診（週六日休診）</div>
+          </div>
+        </div>
+
+        <p class="text-[11px] text-slate-400">
+          💡 點擊「確認釋出」後，系統將立即把病患端線上預約截止日推延至該月底。若需安排特定國定假日休診或請假，亦可在釋出前後於排班異動隨時調整。
+        </p>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+        <button type="button" onclick="closeBookingWindowReleaseModal()" class="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
+          取消返回
+        </button>
+        <button type="button" id="btnConfirmReleaseWindow" onclick="confirmReleaseBookingWindow()" class="px-5 py-2 bg-pine-700 hover:bg-pine-800 text-white rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>確認排班無誤，立即釋出</span>
+        </button>
       </div>
     </div>
   </div>
@@ -1213,6 +1363,7 @@
       loadAppointments();
       loadScheduleConfig();
       initQuickLockBoard();
+      loadBookingWindowConfig();
 
       const today = new Date();
       const tomorrow = new Date(today);
@@ -1240,9 +1391,11 @@
       });
       if (tabId === 'appointments') {
         loadQuickLockBoard();
+        loadBookingWindowConfig();
       }
       if (tabId === 'schedules') {
         loadScheduleConfig();
+        loadBookingWindowConfig();
       }
       if (tabId === 'gallery') {
         loadAdminPhotos();
@@ -1295,6 +1448,185 @@
         if (typeof loadQuickLockBoard === 'function') loadQuickLockBoard();
       } catch (e) {
         console.error(e);
+      }
+    }
+
+    // ==========================================
+    // 📅 預約開放區間與次月釋出控管 (Booking Window)
+    // ==========================================
+    let currentBookingWindowData = null;
+
+    async function loadBookingWindowConfig() {
+      try {
+        const res = await adminFetch('/api/admin/booking-window');
+        const data = await res.json();
+        currentBookingWindowData = data;
+
+        // 1. Update reminder banner in appointments tab
+        const banner = document.getElementById('bannerBookingWindowReminder');
+        const badgeDays = document.getElementById('badgeDaysRemaining');
+        const txtCurrent = document.getElementById('reminderCurrentDate');
+        if (banner) {
+          if (data.needs_reminder) {
+            banner.classList.remove('hidden');
+            if (badgeDays) badgeDays.textContent = `剩餘 ${data.days_remaining} 天`;
+            if (txtCurrent) txtCurrent.textContent = data.open_until_date || '--';
+          } else {
+            banner.classList.add('hidden');
+          }
+        }
+
+        // 2. Update schedule tab card
+        const infoOpenUntil = document.getElementById('infoCurrentOpenUntil');
+        const infoDaysRem = document.getElementById('infoDaysRemaining');
+        const infoNextMonth = document.getElementById('infoNextMonthLabel');
+        const infoNextRange = document.getElementById('infoNextMonthRange');
+        const inputCustom = document.getElementById('inputCustomOpenUntil');
+        const btnReleaseLabel = document.getElementById('btnLabelReleaseNextMonth');
+        const badgeStatus = document.getElementById('badgeScheduleWindowStatus');
+
+        if (infoOpenUntil) infoOpenUntil.textContent = data.open_until_date || '--';
+        if (infoDaysRem) infoDaysRem.textContent = `(剩餘 ${data.days_remaining} 天)`;
+        if (infoNextMonth) infoNextMonth.textContent = data.next_month_label || '--';
+        if (infoNextRange) infoNextRange.textContent = `(${data.next_month_start} 至 ${data.next_month_end})`;
+        if (inputCustom && !inputCustom.value) inputCustom.value = data.open_until_date || '';
+
+        if (btnReleaseLabel && data.next_month_label) {
+          btnReleaseLabel.textContent = `審核並釋出 ${data.next_month_label} 預約`;
+        }
+
+        if (badgeStatus) {
+          if (data.needs_reminder) {
+            badgeStatus.className = 'text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full font-bold';
+            badgeStatus.textContent = '⚠️ 次月排班待釋出';
+          } else {
+            badgeStatus.className = 'text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full font-bold';
+            badgeStatus.textContent = '🟢 線上開放中';
+          }
+        }
+      } catch (err) {
+        console.error('loadBookingWindowConfig error:', err);
+      }
+    }
+
+    function openBookingWindowReleaseModal() {
+      if (!currentBookingWindowData) return;
+      const data = currentBookingWindowData;
+      const preview = data.preview || {};
+
+      const titleEl = document.getElementById('modalReleaseTitle');
+      if (titleEl) titleEl.textContent = `審核並釋出 ${data.next_month_label} 看診預約`;
+      const rangeEl = document.getElementById('modalPreviewDateRange');
+      if (rangeEl) rangeEl.textContent = `${preview.start_date || data.next_month_start} 至 ${preview.end_date || data.next_month_end}`;
+      const cDaysEl = document.getElementById('modalPreviewCalendarDays');
+      if (cDaysEl) cDaysEl.textContent = preview.total_calendar_days || '--';
+      const wDaysEl = document.getElementById('modalPreviewWorkDays');
+      if (wDaysEl) wDaysEl.textContent = preview.total_work_days || '--';
+
+      // 劉院長
+      const liu = preview.th_liu || {};
+      const elLiuStatus = document.getElementById('modalPreviewLiuStatus');
+      const elLiuDesc = document.getElementById('modalPreviewLiuDesc');
+      if (elLiuStatus && elLiuDesc) {
+        if (liu.off_days_count > 0) {
+          elLiuStatus.className = 'text-[11px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md';
+          elLiuStatus.textContent = `已設 ${liu.off_days_count} 天休診`;
+          elLiuDesc.textContent = `門診工作天 ${liu.total_work_days - liu.off_days_count} 天 · 請假/休診：${liu.reasons.join('、')}`;
+        } else {
+          elLiuStatus.className = 'text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md';
+          elLiuStatus.textContent = '常態全開 (無休診)';
+          elLiuDesc.textContent = `每週一至五常態門診（共 ${liu.total_work_days} 個門診日，週六日休診）`;
+        }
+      }
+
+      // 洪治療師
+      const hong = preview.th_hong || {};
+      const elHongStatus = document.getElementById('modalPreviewHongStatus');
+      const elHongDesc = document.getElementById('modalPreviewHongDesc');
+      if (elHongStatus && elHongDesc) {
+        if (hong.off_days_count > 0) {
+          elHongStatus.className = 'text-[11px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md';
+          elHongStatus.textContent = `已設 ${hong.off_days_count} 天休診`;
+          elHongDesc.textContent = `門診工作天 ${hong.total_work_days - hong.off_days_count} 天 · 請假/休診：${hong.reasons.join('、')}`;
+        } else {
+          elHongStatus.className = 'text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md';
+          elHongStatus.textContent = '常態全開 (無休診)';
+          elHongDesc.textContent = `每週一至五常態門診（共 ${hong.total_work_days} 個門診日，週六日休診）`;
+        }
+      }
+
+      const modal = document.getElementById('modalBookingWindowRelease');
+      if (modal) modal.classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function closeBookingWindowReleaseModal() {
+      const modal = document.getElementById('modalBookingWindowRelease');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    async function confirmReleaseBookingWindow() {
+      if (!currentBookingWindowData) return;
+      const targetDate = currentBookingWindowData.next_month_end;
+      const btn = document.getElementById('btnConfirmReleaseWindow');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>釋出中...</span>';
+        if (window.lucide) lucide.createIcons();
+      }
+      try {
+        const res = await adminFetch('/api/admin/booking-window', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ open_until_date: targetDate })
+        });
+        const result = await res.json();
+        if (!res.ok) {
+          alert(result.error || '釋出失敗，請重試');
+          return;
+        }
+        alert(result.message || `成功釋出 ${currentBookingWindowData.next_month_label} 預約！`);
+        closeBookingWindowReleaseModal();
+        await loadBookingWindowConfig();
+        if (typeof loadScheduleConfig === 'function') loadScheduleConfig();
+        if (typeof loadQuickLockBoard === 'function') loadQuickLockBoard();
+      } catch (err) {
+        alert('操作失敗，請檢查網路連線後重試');
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i><span>確認排班無誤，立即釋出</span>';
+          if (window.lucide) lucide.createIcons();
+        }
+      }
+    }
+
+    async function submitCustomBookingWindow() {
+      const input = document.getElementById('inputCustomOpenUntil');
+      if (!input || !input.value) {
+        alert('請選擇開放預約截止日');
+        return;
+      }
+      const targetDate = input.value;
+      if (!confirm(`確定要將線上預約截止日調整為 ${targetDate} 嗎？`)) return;
+
+      try {
+        const res = await adminFetch('/api/admin/booking-window', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ open_until_date: targetDate })
+        });
+        const result = await res.json();
+        if (!res.ok) {
+          alert(result.error || '儲存失敗，請重試');
+          return;
+        }
+        alert(result.message || `已成功更新開放截止日至 ${targetDate}！`);
+        await loadBookingWindowConfig();
+        if (typeof loadScheduleConfig === 'function') loadScheduleConfig();
+        if (typeof loadQuickLockBoard === 'function') loadQuickLockBoard();
+      } catch (err) {
+        alert('儲存失敗，請重試');
       }
     }
 

@@ -407,13 +407,16 @@
               <label class="block text-sm md:text-base font-bold text-slate-900 flex items-center gap-2">
                 <i data-lucide="calendar" class="w-5 h-5 text-pine-700"></i> 選擇看診日期
               </label>
-              <span class="text-xs text-slate-500 font-medium bg-slate-100 px-2 py-0.5 rounded-lg">開放未來 30 天</span>
+              <span id="bookingWindowPill" class="text-xs text-pine-800 font-bold bg-pine-50 border border-pine-200 px-2.5 py-0.5 rounded-lg shadow-2xs">開放掛號中</span>
             </div>
 
             <!-- Date Scroll List -->
             <div class="flex space-x-2.5 overflow-x-auto pb-2 pt-1 hide-scrollbar" id="datePickerList">
               <!-- Dynamically rendered -->
             </div>
+
+            <!-- 友善開放截止日提示 -->
+            <div id="bookingWindowNotice" class="hidden"></div>
 
             <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
               <span id="selectedDateText" class="font-extrabold text-pine-800 text-sm md:text-base">請選取日期</span>
@@ -1986,10 +1989,12 @@ async function generateDateList() {
 
   const tId = bookingData.therapistId || 'any';
   let summaryMap = {};
+  let openUntilDate = '';
   try {
-    const res = await fetch('/api/schedule-summary?therapist_id=' + encodeURIComponent(tId) + '&days=30');
+    const res = await fetch('/api/schedule-summary?therapist_id=' + encodeURIComponent(tId) + '&days=60');
     if (res.ok) {
       const data = await res.json();
+      openUntilDate = data.open_until_date || '';
       if (Array.isArray(data.days)) {
         data.days.forEach(item => {
           summaryMap[item.date] = item;
@@ -2011,6 +2016,36 @@ async function generateDateList() {
             : '每時段專屬物理治療師施作，額滿自動隱藏';
         }
       }
+
+      // Update Pill
+      const pillEl = document.getElementById('bookingWindowPill');
+      if (pillEl) {
+        if (openUntilDate) {
+          const [py, pm, pd] = openUntilDate.split('-');
+          pillEl.textContent = `開放至 ${parseInt(pm, 10)}/${parseInt(pd, 10)}`;
+        } else {
+          pillEl.textContent = '開放掛號中';
+        }
+      }
+
+      // Update Friendly Notice
+      const noticeEl = document.getElementById('bookingWindowNotice');
+      if (noticeEl) {
+        if (openUntilDate) {
+          const [ny, nm, nd] = openUntilDate.split('-');
+          noticeEl.className = 'mt-1 pt-1';
+          noticeEl.innerHTML = `
+            <div class="flex items-center gap-2 text-xs text-pine-900 bg-pine-50/80 border border-pine-200/70 rounded-xl px-3.5 py-2.5">
+              <i data-lucide="calendar-check" class="w-4 h-4 text-pine-700 shrink-0"></i>
+              <span>目前線上開放掛號至 <strong>${parseInt(ny, 10)} 年 ${parseInt(nm, 10)} 月 ${parseInt(nd, 10)} 日</strong>。次月份治療師門診排班確認後將即時釋出。</span>
+            </div>
+          `;
+          if (window.lucide) lucide.createIcons();
+          noticeEl.classList.remove('hidden');
+        } else {
+          noticeEl.classList.add('hidden');
+        }
+      }
     }
   } catch (e) {
     // Fallback to default Mon-Fri if offline
@@ -2024,7 +2059,7 @@ async function generateDateList() {
   let firstAvailableWeekday = null;
   let keepPreviousDate = false;
 
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 60; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
 
@@ -2033,6 +2068,10 @@ async function generateDateList() {
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     const dateStr = `${y}-${m}-${day}`;
+
+    if (openUntilDate && dateStr > openUntilDate) {
+      break;
+    }
 
     const info = summaryMap[dateStr];
     const isClosed = info ? Boolean(info.is_closed) : (dayOfWeek === 0 || dayOfWeek === 6);
