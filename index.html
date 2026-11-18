@@ -67,7 +67,7 @@
       </div>
 
       <!-- Desktop Navigation Tabs (Visible on screens >= 768px) -->
-      <nav class="hidden lg:flex items-center space-x-1 bg-black/25 p-1 rounded-xl border border-white/10 text-xs">
+      <nav id="desktopNav" class="hidden lg:flex items-center space-x-1 bg-black/25 p-1 rounded-xl border border-white/10 text-xs">
         <button onclick="switchTab('booking')" id="dnav-booking" class="px-3 py-1.5 rounded-lg font-bold bg-white text-pine-900 shadow-sm transition whitespace-nowrap">
           預約掛號
         </button>
@@ -134,8 +134,96 @@
       </div>
     </div>
 
+    <!-- 全站 LINE 登入守門員 (未登入時全站鎖定) -->
+    <div id="lineLoginGate" class="hidden flex-1 flex flex-col items-center justify-center p-6 md:p-12 text-center bg-gradient-to-b from-pine-50/50 via-white to-slate-50">
+      <div class="max-w-md w-full bg-white p-6 md:p-8 rounded-3xl border border-pine-100 shadow-xl space-y-5">
+        
+        <!-- Logo & Title -->
+        <div class="space-y-2">
+          <div class="w-16 h-16 rounded-2xl bg-pine-800 text-white flex items-center justify-center mx-auto shadow-md">
+            <i data-lucide="trees" class="w-9 h-9 text-pine-200"></i>
+          </div>
+          <h2 class="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">青松物理治療所</h2>
+          <p class="text-xs text-pine-700 font-bold">門診線上掛號與就診照護系統</p>
+        </div>
+
+        <!-- Explanation card -->
+        <div class="p-4 bg-emerald-50/80 border border-emerald-200/90 rounded-2xl text-left space-y-2 text-xs leading-relaxed text-slate-700">
+          <div class="font-bold text-emerald-900 flex items-center gap-1.5">
+            <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600 flex-shrink-0"></i>
+            <span>LINE 實名掛號 ＆ 前一日自動提醒</span>
+          </div>
+          <p>
+            為確保每位病友都能順利收到<strong>看診前一日下午 17:00 的出席確認推播</strong>、預約憑證與就診注意事項，本系統採 LINE 實名預約。
+          </p>
+          <p class="text-slate-500 text-[11px]">
+            ※ 首次填寫後，系統將自動為您記憶姓名與手機，下次預約 3 秒完成！
+          </p>
+        </div>
+
+        <!-- Action Button -->
+        <div class="space-y-3 pt-1">
+          <button type="button" onclick="loginWithLine()" class="w-full py-3.5 bg-[#06C755] hover:bg-[#05b34c] active:bg-[#049b42] text-white font-bold rounded-2xl text-sm md:text-base shadow-lg hover:shadow-xl transition flex items-center justify-center gap-2 cursor-pointer">
+            <i data-lucide="message-circle" class="w-5 h-5"></i>
+            <span>使用 LINE 帳號一鍵登入預約</span>
+          </button>
+
+          <!-- Elderly / Phone reservation fallback -->
+          <div class="pt-3 border-t border-slate-100 space-y-1.5">
+            <p class="text-[11px] text-slate-400">長輩或無 LINE 帳號之病友？</p>
+            <a href="tel:077353353" class="inline-flex items-center justify-center gap-1.5 w-full py-2.5 px-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
+              <i data-lucide="phone-call" class="w-3.5 h-3.5 text-pine-700"></i>
+              <span>電話預約專線：07-7353353</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Clinic Address Footer -->
+        <p class="text-[11px] text-slate-400 pt-1">
+          高雄市鳥松區華美路69號 · 全預約制門診
+        </p>
+      </div>
+    </div>
+
+    <!-- 官方好友守門員 (未加好友或封鎖時攔截) -->
+    <div id="lineFriendshipGate" class="hidden flex-1 flex flex-col items-center justify-center p-6 md:p-12 text-center bg-gradient-to-b from-amber-50/50 via-white to-slate-50">
+      <div class="max-w-md w-full bg-white p-6 md:p-8 rounded-3xl border border-amber-200 shadow-xl space-y-5">
+        
+        <div class="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto shadow-inner">
+          <i data-lucide="user-plus" class="w-8 h-8"></i>
+        </div>
+
+        <div class="space-y-1.5">
+          <h2 class="text-lg md:text-xl font-bold text-slate-900">請先加入青松官方帳號好友</h2>
+          <p class="text-xs text-slate-500">已登入 LINE，但尚未將青松官方帳號加為好友</p>
+        </div>
+
+        <div class="p-4 bg-amber-50/80 border border-amber-200 rounded-2xl text-left space-y-2 text-xs leading-relaxed text-slate-700">
+          <p>
+            若未加入好友（或曾設定封鎖），系統將<strong>無法為您傳送看診前一天 17:00 的出席確認卡片</strong>與掛號憑證。
+          </p>
+          <p class="text-amber-900 font-bold">
+            👉 請先點擊下方按鈕加入好友，完成後回到此頁點選「我已加入好友」即可開始預約！
+          </p>
+        </div>
+
+        <div class="space-y-2.5 pt-1">
+          <button type="button" onclick="openAddFriendLink()" class="w-full py-3.5 bg-[#06C755] hover:bg-[#05b34c] text-white font-bold rounded-2xl text-sm shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+            <i data-lucide="user-plus" class="w-4 h-4"></i>
+            <span>前往加入青松官方好友</span>
+          </button>
+
+          <button type="button" onclick="recheckFriendship()" id="btnRecheckFriend" class="w-full py-3 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold rounded-2xl text-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            <span>我已加入好友，進入預約系統</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
     <!-- Main Content Container -->
-    <main class="flex-1 p-4 md:p-8 overflow-y-auto">
+    <main id="appMainContent" class="flex-1 p-4 md:p-8 overflow-y-auto">
 
       <!-- ================= TAB 1: 預約掛號 ================= -->
       <section id="tab-booking" class="tab-pane space-y-5">
@@ -1007,7 +1095,7 @@
     </main>
 
     <!-- Bottom Navigation Bar (Visible on mobile only, hidden on md) -->
-    <nav class="md:hidden fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-slate-200 z-40 pb-safe">
+    <nav id="mainBottomNav" class="md:hidden fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-slate-200 z-40 pb-safe">
       <div class="grid grid-cols-6 py-2">
         <button onclick="switchTab('booking')" id="nav-booking" class="flex flex-col items-center justify-center text-pine-700 font-bold transition">
           <i data-lucide="calendar-plus" class="w-4 h-4"></i>
@@ -1080,9 +1168,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   loadMyAppointments();
 });
 
-// --- LINE LIFF Initialization ---
+// --- Dynamic Clinic & LINE Settings ---
+let clinicSettings = {
+  clinic_line_id: '@557fabgw',
+  liff_id: '2012458374-x8h6v4Dh',
+  clinic_phone: '07-7353353'
+};
+
+async function loadClinicSettings() {
+  try {
+    const res = await fetch('/api/settings');
+    const data = await res.json();
+    if (data.clinic_line_id) clinicSettings.clinic_line_id = data.clinic_line_id;
+    if (data.liff_id) clinicSettings.liff_id = data.liff_id;
+    if (data.clinic_phone) clinicSettings.clinic_phone = data.clinic_phone;
+  } catch (e) {
+    console.warn('載入診所設定失敗，使用預設值:', e);
+  }
+}
+
+// --- LINE LIFF Initialization & Gatekeepers ---
 async function initLiff() {
-  const LIFF_ID = '2012458374-x8h6v4Dh';
+  await loadClinicSettings();
+  const LIFF_ID = clinicSettings.liff_id || '2012458374-x8h6v4Dh';
+
   try {
     if (window.liff) {
       await liff.init({ liffId: LIFF_ID });
@@ -1094,17 +1203,140 @@ async function initLiff() {
           currentLineUser.pictureUrl = profile.pictureUrl;
         }
         updateUserUI();
-        return;
+
+        // 檢查是否已將診所官方帳號加為好友
+        const isFriend = await checkFriendshipStatus();
+        if (isFriend) {
+          unlockApp();
+          return;
+        } else {
+          showFriendshipGate();
+          return;
+        }
       }
     }
   } catch (err) {
     console.warn('LIFF init fallback:', err);
   }
-  // 未登入 LINE（一般網頁訪客）
-  localStorage.removeItem('qingsong_test_user');
-  currentLineUser.userId = 'U_GUEST_' + Math.random().toString(36).slice(2, 10);
-  currentLineUser.displayName = '';
-  updateUserUI();
+
+  // 檢查是否在本地開發模擬器模式
+  const simulated = localStorage.getItem('qingsong_test_user');
+  if (simulated) {
+    try {
+      const parsed = JSON.parse(simulated);
+      if (parsed && parsed.userId) {
+        currentLineUser = parsed;
+        updateUserUI();
+        unlockApp();
+        return;
+      }
+    } catch (e) {}
+  }
+
+  // 未登入 LINE（一般網頁訪客 / 外部瀏覽器開啟）：顯示全站登入守門員
+  showLoginGate();
+}
+
+async function checkFriendshipStatus() {
+  try {
+    if (window.liff && typeof liff.getFriendship === 'function') {
+      const friendship = await liff.getFriendship();
+      return !!friendship.friendFlag;
+    }
+  } catch (e) {
+    console.warn('Friendship check error:', e);
+  }
+  return true;
+}
+
+function openAddFriendLink() {
+  const lineId = clinicSettings.clinic_line_id || '@557fabgw';
+  const cleanId = lineId.replace(/^@/, '');
+  const url = `https://line.me/R/ti/p/@${cleanId}`;
+  if (window.liff && typeof liff.openWindow === 'function') {
+    liff.openWindow({ url, external: true });
+  } else {
+    window.open(url, '_blank');
+  }
+}
+
+async function recheckFriendship() {
+  const btn = document.getElementById('btnRecheckFriend');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>正在確認好友狀態...</span>';
+    lucide.createIcons();
+  }
+
+  const isFriend = await checkFriendshipStatus();
+  if (isFriend) {
+    unlockApp();
+  } else {
+    alert('系統偵測您尚未完成加入好友（或伺服器仍在同步中），請先點擊「前往加入青松官方好友」加入後稍候幾秒再試！');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i><span>我已加入好友，進入預約系統</span>';
+      lucide.createIcons();
+    }
+  }
+}
+
+function unlockApp() {
+  const loginGate = document.getElementById('lineLoginGate');
+  const friendGate = document.getElementById('lineFriendshipGate');
+  const mainContent = document.getElementById('appMainContent');
+  const dNav = document.getElementById('desktopNav');
+  const bNav = document.getElementById('mainBottomNav');
+  const loginBtn = document.getElementById('btnHeaderLineLogin');
+  const userPill = document.getElementById('userProfilePill');
+
+  if (loginGate) loginGate.classList.add('hidden');
+  if (friendGate) friendGate.classList.add('hidden');
+  if (mainContent) mainContent.classList.remove('hidden');
+  if (dNav) dNav.classList.remove('hidden');
+  if (bNav) bNav.classList.remove('hidden');
+  if (loginBtn) loginBtn.classList.add('hidden');
+  if (userPill) userPill.classList.remove('hidden');
+
+  lucide.createIcons();
+  checkPatientMemory();
+  loadMyAppointments();
+}
+
+function showLoginGate() {
+  const loginGate = document.getElementById('lineLoginGate');
+  const friendGate = document.getElementById('lineFriendshipGate');
+  const mainContent = document.getElementById('appMainContent');
+  const dNav = document.getElementById('desktopNav');
+  const bNav = document.getElementById('mainBottomNav');
+  const loginBtn = document.getElementById('btnHeaderLineLogin');
+  const userPill = document.getElementById('userProfilePill');
+
+  if (loginGate) loginGate.classList.remove('hidden');
+  if (friendGate) friendGate.classList.add('hidden');
+  if (mainContent) mainContent.classList.add('hidden');
+  if (dNav) dNav.classList.add('hidden');
+  if (bNav) bNav.classList.add('hidden');
+  if (loginBtn) loginBtn.classList.remove('hidden');
+  if (userPill) userPill.classList.add('hidden');
+
+  lucide.createIcons();
+}
+
+function showFriendshipGate() {
+  const loginGate = document.getElementById('lineLoginGate');
+  const friendGate = document.getElementById('lineFriendshipGate');
+  const mainContent = document.getElementById('appMainContent');
+  const dNav = document.getElementById('desktopNav');
+  const bNav = document.getElementById('mainBottomNav');
+
+  if (loginGate) loginGate.classList.add('hidden');
+  if (friendGate) friendGate.classList.remove('hidden');
+  if (mainContent) mainContent.classList.add('hidden');
+  if (dNav) dNav.classList.add('hidden');
+  if (bNav) bNav.classList.add('hidden');
+
+  lucide.createIcons();
 }
 
 function loginWithLine() {
@@ -1113,17 +1345,20 @@ function loginWithLine() {
       liff.login({ redirectUri: window.location.href });
       return;
     } catch (e) {
-      // fallback below
+      console.warn('liff.login failed, redirecting to liff url:', e);
     }
   }
-  window.location.href = 'https://liff.line.me/2012458374-x8h6v4Dh';
+  const liffId = clinicSettings.liff_id || '2012458374-x8h6v4Dh';
+  window.location.href = `https://liff.line.me/${liffId}`;
 }
 
 async function sayHelloToClinic() {
+  const lineId = clinicSettings.clinic_line_id || '@557fabgw';
+  const cleanId = lineId.replace(/^@/, '');
   const greetingText = '您好！我想諮詢青松物理治療所的預約與看診事宜 😊';
-  const oaUrl = 'https://line.me/R/oaMessage/@557fabgw/?' + encodeURIComponent(greetingText);
+  const oaUrl = `https://line.me/R/oaMessage/@${cleanId}/?` + encodeURIComponent(greetingText);
 
-  if (window.liff && liff.isInClient()) {
+  if (window.liff && liff.isInClient && liff.isInClient()) {
     try {
       await liff.sendMessages([{ type: 'text', text: greetingText }]);
       alert('✅ 已在 LINE 聊天室幫您跟青松物理治療所打聲招呼囉！\n治療師／櫃檯看到後就能直接回覆您。');
@@ -1180,6 +1415,7 @@ function switchTestUser(uid, name, phone, birthday) {
   localStorage.setItem('qingsong_test_user', JSON.stringify(currentLineUser));
   updateUserUI();
   toggleUserSimulator();
+  unlockApp();
 
   if (name && phone) {
     // 測試模擬器切換用戶時才帶入，正式病患保持空白

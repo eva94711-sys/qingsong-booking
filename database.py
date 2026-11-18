@@ -349,6 +349,7 @@ def seed_data(cursor):
         "clinic_address": "高雄市鳥松區華美路69號",
         "clinic_line_id": "@557fabgw",
         "liff_id": "2012458374-x8h6v4Dh",
+        "line_channel_access_token": "",
         "booking_window_days": "30",
         "cancel_lead_hours": "24",
         "reminder_lead_hours": "24",

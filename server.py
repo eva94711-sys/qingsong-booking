@@ -283,6 +283,8 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.api_admin_update_default_slots(body)
         elif path == "/api/admin/booking-rules":
             self.api_admin_update_booking_rules(body)
+        elif path == "/api/admin/line-config":
+            self.api_admin_update_line_config(body)
         elif path == "/api/reminders/check-and-send":
             self.api_trigger_reminders(body)
         elif path == "/api/line/webhook":
@@ -533,8 +535,11 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM settings")
         rows = cursor.fetchall()
-        # Filter out sensitive admin keys
-        settings = {r["key"]: r["value"] for r in rows if not r["key"].startswith("admin_")}
+        # Filter out sensitive admin keys and secrets
+        settings = {
+            r["key"]: r["value"] for r in rows
+            if not r["key"].startswith("admin_") and r["key"] != "line_channel_access_token"
+        }
         if "default_slots" in settings:
             try:
                 settings["default_slots"] = json.loads(settings["default_slots"])
@@ -1331,6 +1336,18 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             ORDER BY date ASC, time_slot ASC
         """)
         overrides = [dict(r) for r in cursor.fetchall()]
+
+        cursor.execute("SELECT key, value FROM settings WHERE key IN ('clinic_line_id', 'liff_id', 'line_channel_access_token')")
+        line_settings = {r["key"]: r["value"] for r in cursor.fetchall()}
+        custom_token = (line_settings.get("line_channel_access_token") or "").strip()
+        env_token = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "").strip()
+        has_token = bool(custom_token or env_token or DEFAULT_LINE_TOKEN)
+        line_config = {
+            "clinic_line_id": line_settings.get("clinic_line_id", "@557fabgw"),
+            "liff_id": line_settings.get("liff_id", "2012458374-x8h6v4Dh"),
+            "has_token": has_token,
+            "token_masked": "••••••••" if has_token else ""
+        }
         conn.close()
 
         self.send_json({
@@ -1338,7 +1355,8 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             "weekly_schedules": weekly_schedules,
             "therapists": [dict(t) for t in therapists],
             "overrides": overrides,
-            "booking_rules": booking_rules
+            "booking_rules": booking_rules,
+            "line_config": line_config
         })
 
     def api_admin_create_schedule_override(self, body):
@@ -1504,6 +1522,44 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         finally:
             conn.close()
 
+    def api_admin_update_line_config(self, body):
+        clinic_line_id = (body.get("clinic_line_id") or "").strip()
+        liff_id = (body.get("liff_id") or "").strip()
+        token = (body.get("line_channel_access_token") or "").strip()
+
+        if clinic_line_id and not clinic_line_id.startswith("@"):
+            clinic_line_id = "@" + clinic_line_id
+
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        try:
+            if clinic_line_id:
+                cursor.execute("""
+                    INSERT INTO settings (key, value) VALUES ('clinic_line_id', ?)
+                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+                """, (clinic_line_id,))
+            if liff_id:
+                cursor.execute("""
+                    INSERT INTO settings (key, value) VALUES ('liff_id', ?)
+                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+                """, (liff_id,))
+            if token and not token.startswith("•") and token != "********":
+                cursor.execute("""
+                    INSERT INTO settings (key, value) VALUES ('line_channel_access_token', ?)
+                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+                """, (token,))
+            conn.commit()
+            invalidate_schedule_cache()
+            self.send_json({
+                "success": True,
+                "message": "LINE 官方帳號與 LIFF 設定已成功更新！"
+            })
+        except Exception as e:
+            conn.rollback()
+            self.send_json({"error": f"更新 LINE 設定失敗: {str(e)}"}, status=500)
+        finally:
+            conn.close()
+
     def api_admin_export_csv(self, query):
         conn = database.get_connection()
         cursor = conn.cursor()
@@ -1550,6 +1606,16 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(csv_bytes)
 
     def get_line_token(self):
+        try:
+            conn = database.get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM settings WHERE key = 'line_channel_access_token'")
+            row = cursor.fetchone()
+            conn.close()
+            if row and row["value"] and row["value"].strip():
+                return row["value"].strip()
+        except Exception:
+            pass
         return os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", DEFAULT_LINE_TOKEN)
 
     def send_line_push_flex(self, to_user_id, alt_text, flex_content):
