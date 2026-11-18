@@ -805,8 +805,8 @@
           </div>
         </div>
 
-        <!-- 診所實景與專業設備導覽相簿專區 -->
-        <div class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <!-- 診所實景與專業設備導覽相簿專區 (無照片時自動隱藏，待後台上傳後一次全部展示) -->
+        <div id="clinicGallerySection" class="hidden bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
             <div class="flex items-center space-x-2.5">
               <div class="w-8 h-8 rounded-xl bg-pine-100 text-pine-800 flex items-center justify-center">
@@ -822,32 +822,8 @@
             </span>
           </div>
 
-          <!-- 分類切換按鈕 (四大核心分類) -->
-          <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs hide-scrollbar">
-            <button type="button" onclick="filterGalleryCategory('全部')" id="btnPhotoCat-all" class="px-3 py-1.5 rounded-xl font-bold bg-pine-700 text-white shadow-xs transition whitespace-nowrap cursor-pointer">
-              全部展示
-            </button>
-            <button type="button" onclick="filterGalleryCategory('診所環境與候診')" id="btnPhotoCat-env" class="px-3 py-1.5 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 font-medium transition whitespace-nowrap cursor-pointer">
-              診所環境與候診
-            </button>
-            <button type="button" onclick="filterGalleryCategory('獨立徒手治療室')" id="btnPhotoCat-room" class="px-3 py-1.5 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 font-medium transition whitespace-nowrap cursor-pointer">
-              獨立徒手治療室
-            </button>
-            <button type="button" onclick="filterGalleryCategory('運動訓練與動作控制')" id="btnPhotoCat-exercise" class="px-3 py-1.5 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 font-medium transition whitespace-nowrap cursor-pointer">
-              運動訓練與動作控制
-            </button>
-            <button type="button" onclick="filterGalleryCategory('高端設備（震波）')" id="btnPhotoCat-device" class="px-3 py-1.5 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 font-medium transition whitespace-nowrap cursor-pointer">
-              高端設備（震波）
-            </button>
-          </div>
-
-          <!-- 照片網格 -->
-          <div id="clinicPhotoGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-            <div class="col-span-full py-10 text-center text-slate-400 text-xs">
-              <i data-lucide="loader-2" class="w-5 h-5 animate-spin mx-auto mb-2 text-pine-600"></i>
-              <span>正在載入診所相簿...</span>
-            </div>
-          </div>
+          <!-- 照片網格 (一次全部展示) -->
+          <div id="clinicPhotoGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1"></div>
         </div>
       </section>
 
@@ -2734,10 +2710,8 @@ async function cancelAppointment(aptId) {
   }
 }
 
-// --- 診所相簿與實景導覽 (Clinic Photos & Gallery) ---
+// --- 診所相簿與實景導覽 (Clinic Photos & Gallery - 一次全部展示) ---
 let allClinicPhotos = [];
-let currentGalleryCategory = '全部';
-let currentFilteredPhotos = [];
 let currentLightboxIndex = 0;
 
 function escapeHtml(str) {
@@ -2751,81 +2725,44 @@ function escapeHtml(str) {
 }
 
 async function loadClinicPhotos() {
+  const section = document.getElementById('clinicGallerySection');
   const grid = document.getElementById('clinicPhotoGrid');
   if (!grid) return;
   try {
     const res = await fetch('/api/photos');
     const data = await res.json();
-    if (data.photos && Array.isArray(data.photos)) {
-      allClinicPhotos = data.photos;
-      filterGalleryCategory(currentGalleryCategory);
+    allClinicPhotos = (data && data.photos) ? data.photos : [];
+
+    // 若尚未上傳任何實景照片，前台先自動隱藏專區；一旦上傳照片後立即自動顯示全部
+    if (allClinicPhotos.length === 0) {
+      if (section) section.classList.add('hidden');
+      return;
     }
+
+    if (section) section.classList.remove('hidden');
+    renderClinicPhotos();
   } catch (err) {
     console.error('載入診所相簿失敗:', err);
-    if (grid) {
-      grid.innerHTML = '<div class="col-span-full py-8 text-center text-slate-400 text-xs">相簿載入中，請稍候重試</div>';
-    }
+    if (section) section.classList.add('hidden');
   }
-}
-
-function filterGalleryCategory(category) {
-  currentGalleryCategory = category;
-
-  // 更新分類按鈕樣式
-  const catButtons = [
-    { id: 'btnPhotoCat-all', name: '全部' },
-    { id: 'btnPhotoCat-env', name: '診所環境與候診' },
-    { id: 'btnPhotoCat-room', name: '獨立徒手治療室' },
-    { id: 'btnPhotoCat-exercise', name: '運動訓練與動作控制' },
-    { id: 'btnPhotoCat-device', name: '高端設備（震波）' }
-  ];
-
-  catButtons.forEach(btnInfo => {
-    const btn = document.getElementById(btnInfo.id);
-    if (btn) {
-      if (btnInfo.name === category) {
-        btn.className = 'px-3 py-1.5 rounded-xl font-bold bg-pine-700 text-white shadow-xs transition whitespace-nowrap cursor-pointer';
-      } else {
-        btn.className = 'px-3 py-1.5 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 font-medium transition whitespace-nowrap cursor-pointer';
-      }
-    }
-  });
-
-  // 篩選相片
-  if (category === '全部') {
-    currentFilteredPhotos = [...allClinicPhotos];
-  } else {
-    currentFilteredPhotos = allClinicPhotos.filter(p => p.category === category);
-  }
-
-  renderClinicPhotos();
 }
 
 function renderClinicPhotos() {
   const grid = document.getElementById('clinicPhotoGrid');
   if (!grid) return;
 
-  if (currentFilteredPhotos.length === 0) {
-    grid.innerHTML = `
-      <div class="col-span-full py-12 text-center text-slate-400 space-y-2">
-        <i data-lucide="image-off" class="w-8 h-8 mx-auto text-slate-300"></i>
-        <div class="text-xs">此分類目前尚無實景照片</div>
-      </div>
-    `;
-    lucide.createIcons();
-    return;
-  }
-
-  grid.innerHTML = currentFilteredPhotos.map((photo, idx) => `
+  grid.innerHTML = allClinicPhotos.map((photo, idx) => `
     <div onclick="openPhotoLightbox(${idx})" class="group cursor-pointer rounded-2xl overflow-hidden border border-slate-200 bg-white hover:shadow-md transition-all duration-300 flex flex-col">
       <div class="relative aspect-video overflow-hidden bg-slate-100">
         <img src="${escapeHtml(photo.image_url)}" alt="${escapeHtml(photo.title)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 select-none" loading="lazy">
         <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
           <span class="text-xs text-white flex items-center gap-1 font-medium"><i data-lucide="zoom-in" class="w-3.5 h-3.5"></i> 點擊放大檢視</span>
         </div>
-        <span class="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/95 backdrop-blur-xs text-pine-800 shadow-xs border border-pine-100">
-          ${escapeHtml(photo.category)}
-        </span>
+        ${photo.category ? `
+          <span class="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/95 backdrop-blur-xs text-pine-800 shadow-xs border border-pine-100">
+            ${escapeHtml(photo.category)}
+          </span>
+        ` : ''}
       </div>
       <div class="p-3.5 flex-1 flex flex-col justify-between">
         <div>
@@ -2840,7 +2777,7 @@ function renderClinicPhotos() {
 }
 
 function openPhotoLightbox(index) {
-  if (!currentFilteredPhotos || currentFilteredPhotos.length === 0) return;
+  if (!allClinicPhotos || allClinicPhotos.length === 0) return;
   currentLightboxIndex = index;
   updateLightboxContent();
   const modal = document.getElementById('photoLightboxModal');
@@ -2853,19 +2790,19 @@ function closePhotoLightbox() {
 }
 
 function prevLightboxPhoto() {
-  if (!currentFilteredPhotos || currentFilteredPhotos.length === 0) return;
-  currentLightboxIndex = (currentLightboxIndex - 1 + currentFilteredPhotos.length) % currentFilteredPhotos.length;
+  if (!allClinicPhotos || allClinicPhotos.length === 0) return;
+  currentLightboxIndex = (currentLightboxIndex - 1 + allClinicPhotos.length) % allClinicPhotos.length;
   updateLightboxContent();
 }
 
 function nextLightboxPhoto() {
-  if (!currentFilteredPhotos || currentFilteredPhotos.length === 0) return;
-  currentLightboxIndex = (currentLightboxIndex + 1) % currentFilteredPhotos.length;
+  if (!allClinicPhotos || allClinicPhotos.length === 0) return;
+  currentLightboxIndex = (currentLightboxIndex + 1) % allClinicPhotos.length;
   updateLightboxContent();
 }
 
 function updateLightboxContent() {
-  const photo = currentFilteredPhotos[currentLightboxIndex];
+  const photo = allClinicPhotos[currentLightboxIndex];
   if (!photo) return;
 
   const img = document.getElementById('lightboxImg');
@@ -2878,8 +2815,8 @@ function updateLightboxContent() {
     img.src = photo.image_url;
     img.alt = photo.title;
   }
-  if (cat) cat.textContent = photo.category || '診所環境';
-  if (counter) counter.textContent = `${currentLightboxIndex + 1} / ${currentFilteredPhotos.length}`;
+  if (cat) cat.textContent = photo.category || '診所實景';
+  if (counter) counter.textContent = `${currentLightboxIndex + 1} / ${allClinicPhotos.length}`;
   if (title) title.textContent = photo.title || '';
   if (desc) desc.textContent = photo.description || '';
   lucide.createIcons();

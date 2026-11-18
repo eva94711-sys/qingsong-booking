@@ -639,23 +639,14 @@
         </button>
       </div>
 
-      <!-- 分類切換按鈕 -->
-      <div class="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-        <button type="button" onclick="filterAdminPhotoCategory('全部')" id="btnAdminPhotoCat-all" class="px-3.5 py-1.5 rounded-xl font-bold bg-pine-700 text-white shadow-xs transition whitespace-nowrap cursor-pointer">
-          全部照片 (<span id="countAdminPhoto-all">0</span>)
-        </button>
-        <button type="button" onclick="filterAdminPhotoCategory('診所環境與候診')" id="btnAdminPhotoCat-env" class="px-3.5 py-1.5 rounded-xl text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 font-medium transition whitespace-nowrap cursor-pointer">
-          診所環境與候診 (<span id="countAdminPhoto-env">0</span>)
-        </button>
-        <button type="button" onclick="filterAdminPhotoCategory('獨立徒手治療室')" id="btnAdminPhotoCat-room" class="px-3.5 py-1.5 rounded-xl text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 font-medium transition whitespace-nowrap cursor-pointer">
-          獨立徒手治療室 (<span id="countAdminPhoto-room">0</span>)
-        </button>
-        <button type="button" onclick="filterAdminPhotoCategory('運動訓練與動作控制')" id="btnAdminPhotoCat-exercise" class="px-3.5 py-1.5 rounded-xl text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 font-medium transition whitespace-nowrap cursor-pointer">
-          運動訓練與動作控制 (<span id="countAdminPhoto-exercise">0</span>)
-        </button>
-        <button type="button" onclick="filterAdminPhotoCategory('高端設備（震波）')" id="btnAdminPhotoCat-device" class="px-3.5 py-1.5 rounded-xl text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 font-medium transition whitespace-nowrap cursor-pointer">
-          高端設備（震波） (<span id="countAdminPhoto-device">0</span>)
-        </button>
+      <!-- 功能說明與相片總計 -->
+      <div class="flex items-center justify-between text-xs text-slate-500 px-1">
+        <div class="flex items-center gap-1.5">
+          <i data-lucide="image" class="w-4 h-4 text-pine-700"></i>
+          <span>目前已上傳照片：</span>
+          <span id="countAdminPhoto-all" class="font-bold text-slate-900 font-mono text-sm">0</span>
+          <span>張（前台將一次全部展示，依排序號由小到大排列）</span>
+        </div>
       </div>
 
       <!-- 相片列表網格 -->
@@ -1957,7 +1948,7 @@
         const data = await res.json();
         adminPhotosList = data.photos || [];
         updateAdminPhotoCounts();
-        filterAdminPhotoCategory(adminCurrentPhotoCategory);
+        renderAdminPhotos();
       } catch (err) {
         if (err.message !== 'UNAUTHORIZED') {
           grid.innerHTML = '<div class="col-span-full py-12 text-center text-rose-500 text-xs font-bold">載入相簿相片失敗，請重新整理</div>';
@@ -1966,79 +1957,27 @@
     }
 
     function updateAdminPhotoCounts() {
-      const counts = {
-        '全部': adminPhotosList.length,
-        '診所環境與候診': 0,
-        '獨立徒手治療室': 0,
-        '運動訓練與動作控制': 0,
-        '高端設備（震波）': 0
-      };
-
-      adminPhotosList.forEach(p => {
-        if (counts[p.category] !== undefined) {
-          counts[p.category]++;
-        }
-      });
-
       const countAll = document.getElementById('countAdminPhoto-all');
-      const countEnv = document.getElementById('countAdminPhoto-env');
-      const countRoom = document.getElementById('countAdminPhoto-room');
-      const countExercise = document.getElementById('countAdminPhoto-exercise');
-      const countDevice = document.getElementById('countAdminPhoto-device');
-
-      if (countAll) countAll.textContent = counts['全部'];
-      if (countEnv) countEnv.textContent = counts['診所環境與候診'];
-      if (countRoom) countRoom.textContent = counts['獨立徒手治療室'];
-      if (countExercise) countExercise.textContent = counts['運動訓練與動作控制'];
-      if (countDevice) countDevice.textContent = counts['高端設備（震波）'];
-    }
-
-    function filterAdminPhotoCategory(category) {
-      adminCurrentPhotoCategory = category;
-
-      const catButtons = [
-        { id: 'btnAdminPhotoCat-all', name: '全部' },
-        { id: 'btnAdminPhotoCat-env', name: '診所環境與候診' },
-        { id: 'btnAdminPhotoCat-room', name: '獨立徒手治療室' },
-        { id: 'btnAdminPhotoCat-exercise', name: '運動訓練與動作控制' },
-        { id: 'btnAdminPhotoCat-device', name: '高端設備（震波）' }
-      ];
-
-      catButtons.forEach(btnInfo => {
-        const btn = document.getElementById(btnInfo.id);
-        if (btn) {
-          if (btnInfo.name === category) {
-            btn.className = 'px-3.5 py-1.5 rounded-xl font-bold bg-pine-700 text-white shadow-xs transition whitespace-nowrap cursor-pointer';
-          } else {
-            btn.className = 'px-3.5 py-1.5 rounded-xl text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 font-medium transition whitespace-nowrap cursor-pointer';
-          }
-        }
-      });
-
-      renderAdminPhotos();
+      if (countAll) countAll.textContent = adminPhotosList.length;
     }
 
     function renderAdminPhotos() {
       const grid = document.getElementById('adminPhotoGrid');
       if (!grid) return;
 
-      const filtered = adminCurrentPhotoCategory === '全部'
-        ? adminPhotosList
-        : adminPhotosList.filter(p => p.category === adminCurrentPhotoCategory);
-
-      if (filtered.length === 0) {
+      if (adminPhotosList.length === 0) {
         grid.innerHTML = `
           <div class="col-span-full py-16 text-center text-slate-400 bg-white rounded-2xl border border-slate-200 space-y-3">
-            <i data-lucide="image" class="w-10 h-10 mx-auto text-slate-300"></i>
-            <div class="text-sm font-bold text-slate-600">目前尚無此分類照片</div>
-            <p class="text-xs text-slate-400">點擊上方「新增相片 / 實景照片」即可上傳或輸入網址</p>
+            <i data-lucide="camera" class="w-10 h-10 mx-auto text-slate-300"></i>
+            <div class="text-sm font-bold text-slate-600">目前尚未上傳診所實景照片</div>
+            <p class="text-xs text-slate-400">點擊上方「新增相片 / 實景照片」即可使用手機拍照或檔案上傳，系統會自動最佳化壓縮</p>
           </div>
         `;
         lucide.createIcons();
         return;
       }
 
-      grid.innerHTML = filtered.map(photo => `
+      grid.innerHTML = adminPhotosList.map(photo => `
         <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition flex flex-col justify-between">
           <div>
             <div class="relative aspect-video bg-slate-100 overflow-hidden">

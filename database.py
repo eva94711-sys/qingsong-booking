@@ -386,56 +386,8 @@ def seed_data(cursor):
         cursor.execute("INSERT INTO settings (key, value) VALUES ('admin_password_salt', ?) ON CONFLICT (key) DO NOTHING", (salt,))
         cursor.execute("INSERT INTO settings (key, value) VALUES ('admin_password_hash', ?) ON CONFLICT (key) DO NOTHING", (pwd_hash,))
 
-    # Seed default clinic photos (ON CONFLICT DO NOTHING)
-    now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-    default_photos = [
-        (
-            "photo_01",
-            "溫馨接待與家庭式候診大廳",
-            "診所環境與候診",
-            "明亮通透的報到接待區與舒適沙發候診空間，營造輕鬆放鬆、如家一般的安心看診氛圍。",
-            "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=800&auto=format&fit=crop&q=80",
-            1,
-            1,
-            now_str
-        ),
-        (
-            "photo_02",
-            "獨立專屬徒手物理治療室",
-            "獨立徒手治療室",
-            "配備多段電動升降物理治療床，獨立隔間保障就診隱私，專注於關節鬆動與深層肌筋膜徒手治療。",
-            "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=800&auto=format&fit=crop&q=80",
-            2,
-            1,
-            now_str
-        ),
-        (
-            "photo_03",
-            "挪威紅繩懸吊與核心動作控制區",
-            "運動訓練與動作控制",
-            "配備紅繩懸吊訓練系統（Redcord）與運動指導器材，針對錯誤代償發力進行本體感覺神經肌肉強化。",
-            "https://images.unsplash.com/photo-1540497077202-7c8a3999166f?w=800&auto=format&fit=crop&q=80",
-            3,
-            1,
-            now_str
-        ),
-        (
-            "photo_04",
-            "高端聚焦體外震波治療室",
-            "高端設備（震波）",
-            "備有體外震波治療儀，精準打入深層肌腱韌帶與頑固鈣化點，促進深層血管新生與組織再生修復。",
-            "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&auto=format&fit=crop&q=80",
-            4,
-            1,
-            now_str
-        )
-    ]
-    for p in default_photos:
-        cursor.execute("""
-            INSERT INTO clinic_photos (id, title, category, description, image_url, order_num, is_active, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (id) DO NOTHING
-        """, p)
+    # Clean up dummy placeholder photos if previously seeded (waiting for clinic staff to upload real photos)
+    cursor.execute("DELETE FROM clinic_photos WHERE id IN ('photo_01', 'photo_02', 'photo_03', 'photo_04')")
 
 
 if __name__ == "__main__":
