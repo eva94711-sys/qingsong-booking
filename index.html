@@ -168,6 +168,12 @@
             <span>使用 LINE 帳號一鍵登入預約</span>
           </button>
 
+          <!-- Demo / Guest access for therapists to test before LINE channel is published -->
+          <button type="button" onclick="enterGuestMode()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 font-semibold rounded-2xl text-xs transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200">
+            <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+            <span>訪客體驗模式（瀏覽系統功能）</span>
+          </button>
+
           <!-- Elderly / Phone reservation fallback -->
           <div class="pt-3 border-t border-slate-100 space-y-1.5">
             <p class="text-[11px] text-slate-400">長輩或無 LINE 帳號之病友？</p>
@@ -224,6 +230,13 @@
 
     <!-- Main Content Container -->
     <main id="appMainContent" class="flex-1 p-4 md:p-8 overflow-y-auto">
+      <!-- 訪客模式提示 banner -->
+      <div id="guestModeBanner" class="hidden mb-4 p-3 bg-amber-50 border border-amber-300 rounded-2xl flex items-start gap-2 text-xs text-amber-800">
+        <i data-lucide="eye" class="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5"></i>
+        <div>
+          <span class="font-bold">訪客體驗模式：</span>您正以訪客身分瀏覽系統，預約功能為體驗示範用途。正式使用請<button onclick="showLoginGate()" class="font-bold underline text-amber-900">點此以 LINE 帳號登入</button>。
+        </div>
+      </div>
 
       <!-- ================= TAB 1: 預約掛號 ================= -->
       <section id="tab-booking" class="tab-pane space-y-5">
@@ -1359,6 +1372,21 @@ function unlockApp() {
   lucide.createIcons();
   checkPatientMemory();
   loadMyAppointments();
+}
+
+function enterGuestMode() {
+  // 設定訪客虛擬身分，讓老師或體驗者在 LINE Channel 未 Published 前也能瀏覽系統
+  const guestId = 'U_GUEST_' + Date.now();
+  currentLineUser = {
+    userId: guestId,
+    displayName: '訪客體驗',
+    pictureUrl: ''
+  };
+  // 在頁面頂部顯示訪客提示 banner
+  const banner = document.getElementById('guestModeBanner');
+  if (banner) banner.classList.remove('hidden');
+  updateUserUI();
+  unlockApp();
 }
 
 function showLoginGate() {
