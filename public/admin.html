@@ -138,19 +138,23 @@
 
   <!-- Navigation Bar -->
   <div class="bg-white border-b border-slate-200 sticky top-[61px] z-40">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-6 text-sm font-medium">
-      <button onclick="switchAdminTab('appointments')" id="tabBtn-appointments" class="py-3 border-b-2 border-pine-700 text-pine-700 font-bold flex items-center gap-1.5">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-6 text-sm font-medium overflow-x-auto">
+      <button onclick="switchAdminTab('appointments')" id="tabBtn-appointments" class="py-3 border-b-2 border-pine-700 text-pine-700 font-bold flex items-center gap-1.5 whitespace-nowrap">
         <i data-lucide="calendar" class="w-4 h-4"></i>
         <span>預約名冊與日程</span>
       </button>
-      <button onclick="switchAdminTab('reminders')" id="tabBtn-reminders" class="py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-1.5">
+      <button onclick="switchAdminTab('reminders')" id="tabBtn-reminders" class="py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-1.5 whitespace-nowrap">
         <i data-lucide="bell-ring" class="w-4 h-4"></i>
         <span>24H 自動推播與確認監控</span>
         <span id="pendingBadge" class="hidden ml-1 px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">待確認</span>
       </button>
-      <button onclick="switchAdminTab('schedules')" id="tabBtn-schedules" class="py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-1.5">
+      <button onclick="switchAdminTab('schedules')" id="tabBtn-schedules" class="py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-1.5 whitespace-nowrap">
         <i data-lucide="clock" class="w-4 h-4"></i>
         <span>治療師排班與時段</span>
+      </button>
+      <button onclick="switchAdminTab('gallery')" id="tabBtn-gallery" class="py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-1.5 whitespace-nowrap">
+        <i data-lucide="camera" class="w-4 h-4"></i>
+        <span>📸 相簿與環境管理</span>
       </button>
     </div>
   </div>
@@ -613,6 +617,56 @@
 
     </div>
 
+    <!-- 4. Tab Pane: 📸 相簿與環境管理 -->
+    <div id="adminTab-gallery" class="hidden space-y-5">
+      <!-- 頂部功能條 -->
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="p-2 rounded-xl bg-pine-100 text-pine-800">
+              <i data-lucide="camera" class="w-5 h-5"></i>
+            </span>
+            <div>
+              <h2 class="text-base font-bold text-slate-900">診所環境實景與專業設備相簿管理</h2>
+              <p class="text-xs text-slate-500 mt-0.5">此處管理前台「關於青松」展示的實景相片。支援手機/電腦拍照上傳（自動壓縮至最佳大小，省流量且持久存入資料庫）或提供圖片網址。</p>
+            </div>
+          </div>
+        </div>
+
+        <button onclick="openAddPhotoModal()" class="px-4 py-2.5 bg-pine-700 hover:bg-pine-800 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap self-start md:self-auto">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i>
+          <span>新增相片 / 實景照片</span>
+        </button>
+      </div>
+
+      <!-- 分類切換按鈕 -->
+      <div class="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+        <button type="button" onclick="filterAdminPhotoCategory('全部')" id="btnAdminPhotoCat-all" class="px-3.5 py-1.5 rounded-xl font-bold bg-pine-700 text-white shadow-xs transition whitespace-nowrap cursor-pointer">
+          全部照片 (<span id="countAdminPhoto-all">0</span>)
+        </button>
+        <button type="button" onclick="filterAdminPhotoCategory('診所環境與候診')" id="btnAdminPhotoCat-env" class="px-3.5 py-1.5 rounded-xl text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 font-medium transition whitespace-nowrap cursor-pointer">
+          診所環境與候診 (<span id="countAdminPhoto-env">0</span>)
+        </button>
+        <button type="button" onclick="filterAdminPhotoCategory('獨立徒手治療室')" id="btnAdminPhotoCat-room" class="px-3.5 py-1.5 rounded-xl text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 font-medium transition whitespace-nowrap cursor-pointer">
+          獨立徒手治療室 (<span id="countAdminPhoto-room">0</span>)
+        </button>
+        <button type="button" onclick="filterAdminPhotoCategory('運動訓練與動作控制')" id="btnAdminPhotoCat-exercise" class="px-3.5 py-1.5 rounded-xl text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 font-medium transition whitespace-nowrap cursor-pointer">
+          運動訓練與動作控制 (<span id="countAdminPhoto-exercise">0</span>)
+        </button>
+        <button type="button" onclick="filterAdminPhotoCategory('高端設備（震波）')" id="btnAdminPhotoCat-device" class="px-3.5 py-1.5 rounded-xl text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 font-medium transition whitespace-nowrap cursor-pointer">
+          高端設備（震波） (<span id="countAdminPhoto-device">0</span>)
+        </button>
+      </div>
+
+      <!-- 相片列表網格 -->
+      <div id="adminPhotoGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="col-span-full py-16 text-center text-slate-400 text-xs bg-white rounded-2xl border border-slate-200">
+          <i data-lucide="loader-2" class="w-6 h-6 animate-spin mx-auto mb-2 text-pine-600"></i>
+          <span>載入相簿相片中...</span>
+        </div>
+      </div>
+    </div>
+
   </main>
 
   <!-- Modal: 新增預約 (手動現場/電話掛號) -->
@@ -724,6 +778,109 @@
         <div class="flex gap-2 pt-2 border-t">
           <button type="button" onclick="closeChangePasswordModal()" class="w-1/3 py-2 border rounded-lg text-slate-600 font-bold hover:bg-slate-50 transition">取消</button>
           <button type="submit" id="saveNewPwdBtn" class="w-2/3 py-2 bg-pine-600 hover:bg-pine-700 text-white font-bold rounded-lg transition shadow-sm">確認變更密碼</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: 新增診所相片 (支援本機拍照壓縮上傳或外部網址) -->
+  <div id="modalAddPhoto" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
+    <div class="bg-white rounded-2xl w-full max-w-lg p-5 sm:p-6 space-y-4 shadow-2xl my-auto">
+      <div class="flex items-center justify-between border-b pb-3">
+        <h3 class="font-bold text-sm sm:text-base text-slate-900 flex items-center gap-2">
+          <span class="p-1.5 rounded-lg bg-pine-100 text-pine-800">
+            <i data-lucide="camera" class="w-4 h-4"></i>
+          </span>
+          <span>新增診所實景 / 專業設備相片</span>
+        </h3>
+        <button type="button" onclick="closeAddPhotoModal()" class="p-1 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 cursor-pointer">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="formAddPhoto" onsubmit="submitAddPhoto(event)" class="space-y-4 text-xs">
+        <!-- 上傳模式切換: 檔案/拍照 vs 圖片網址 -->
+        <div>
+          <label class="block font-bold text-slate-700 mb-1.5">照片來源模式 *</label>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50 has-checked:border-pine-600 has-checked:bg-pine-50/50">
+              <input type="radio" name="photoSourceMode" value="file" checked onchange="togglePhotoSourceMode()" class="text-pine-600 focus:ring-pine-500">
+              <span class="font-bold text-slate-800">📱 手機拍照 / 電腦檔案</span>
+            </label>
+            <label class="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50 has-checked:border-pine-600 has-checked:bg-pine-50/50">
+              <input type="radio" name="photoSourceMode" value="url" onchange="togglePhotoSourceMode()" class="text-pine-600 focus:ring-pine-500">
+              <span class="font-bold text-slate-800">🔗 外部圖片網址 (URL)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 檔案上傳模式 -->
+        <div id="photoFileInputSection" class="space-y-2">
+          <label class="block font-bold text-slate-700">選擇照片或拍照</label>
+          <div class="relative border-2 border-dashed border-slate-300 rounded-xl p-4 text-center hover:border-pine-500 transition bg-slate-50/50">
+            <input type="file" id="photoFileInput" accept="image/*" onchange="handlePhotoFileSelected(event)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+            <div id="photoUploadPrompt" class="space-y-1">
+              <i data-lucide="upload-cloud" class="w-7 h-7 mx-auto text-pine-700"></i>
+              <div class="font-bold text-slate-700">點擊此處選擇照片或相機拍照</div>
+              <p class="text-[11px] text-slate-400">系統將自動壓縮至最適合網頁瀏覽之高解析度，省流量且載入秒開</p>
+            </div>
+            <div id="photoPreviewContainer" class="hidden space-y-2">
+              <img id="photoPreviewImg" src="" alt="預覽" class="max-h-48 mx-auto rounded-lg object-contain shadow-sm border border-slate-200">
+              <div class="flex items-center justify-center gap-2 text-[11px] text-emerald-700 font-medium">
+                <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>
+                <span id="photoCompressInfo">已完成最佳化壓縮</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 外部網址模式 -->
+        <div id="photoUrlInputSection" class="hidden space-y-1.5">
+          <label class="block font-bold text-slate-700">圖片網址 (URL) *</label>
+          <input type="url" id="photoUrlInput" placeholder="https://images.unsplash.com/... 或其他圖床網址" oninput="handlePhotoUrlInput(this.value)" class="w-full px-3 py-2 border rounded-xl text-xs">
+          <div id="photoUrlPreviewContainer" class="hidden pt-2">
+            <img id="photoUrlPreviewImg" src="" alt="網址預覽" class="max-h-40 mx-auto rounded-lg object-contain shadow-sm border border-slate-200">
+          </div>
+        </div>
+
+        <!-- 分類選擇 -->
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">展示核心分類 *</label>
+          <select id="addPhotoCategory" class="w-full px-3 py-2 border rounded-xl text-xs bg-white font-medium">
+            <option value="診所環境與候診">🌿 診所環境與候診 (大廳、候診空間)</option>
+            <option value="獨立徒手治療室">🛏️ 獨立徒手治療室 (升降治療床、隱私隔間)</option>
+            <option value="運動訓練與動作控制">🏋️ 運動訓練與動作控制 (紅繩懸吊 Redcord、核心器材)</option>
+            <option value="高端設備（震波）">⚡ 高端設備（震波） (聚焦/發散體外震波儀)</option>
+          </select>
+        </div>
+
+        <!-- 照片標題 -->
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">相片標題 *</label>
+          <input type="text" id="addPhotoTitle" placeholder="例如：診所明亮大廳候診區" class="w-full px-3 py-2 border rounded-xl text-xs font-medium" required>
+        </div>
+
+        <!-- 詳細說明 -->
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">詳細說明 (選填)</label>
+          <textarea id="addPhotoDesc" rows="2" placeholder="簡短介紹該空間或設備特色，將顯示於相簿與放大燈箱中" class="w-full px-3 py-2 border rounded-xl text-xs"></textarea>
+        </div>
+
+        <!-- 排序權重 -->
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">顯示排序權重 (數字越小排越前面)</label>
+          <input type="number" id="addPhotoOrder" value="10" min="0" max="999" class="w-24 px-3 py-1.5 border rounded-xl text-xs font-mono">
+        </div>
+
+        <!-- 按鈕群 -->
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeAddPhotoModal()" class="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition font-medium cursor-pointer">
+            取消
+          </button>
+          <button type="submit" id="btnSubmitAddPhoto" class="px-5 py-2 bg-pine-700 hover:bg-pine-800 text-white rounded-xl shadow-xs transition font-bold flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="check" class="w-4 h-4"></i>
+            <span>確認上傳新增</span>
+          </button>
         </div>
       </form>
     </div>
@@ -1015,9 +1172,10 @@
     }
 
     function switchAdminTab(tabId) {
-      ['appointments', 'reminders', 'schedules'].forEach(t => {
+      ['appointments', 'reminders', 'schedules', 'gallery'].forEach(t => {
         const pane = document.getElementById(`adminTab-${t}`);
         const btn = document.getElementById(`tabBtn-${t}`);
+        if (!pane || !btn) return;
         if (t === tabId) {
           pane.classList.remove('hidden');
           btn.classList.add('border-pine-700', 'text-pine-700', 'font-bold');
@@ -1030,6 +1188,9 @@
       });
       if (tabId === 'schedules') {
         loadScheduleConfig();
+      }
+      if (tabId === 'gallery') {
+        loadAdminPhotos();
       }
       lucide.createIcons();
     }
@@ -1769,6 +1930,322 @@
         loadScheduleConfig();
       } catch (e) {
         if (e.message !== 'UNAUTHORIZED') alert('儲存標準時段失敗');
+      }
+    }
+
+    // --- 相簿與環境管理 (Admin Clinic Photos & Upload) ---
+    let adminPhotosList = [];
+    let adminCurrentPhotoCategory = '全部';
+    let currentPhotoBase64 = '';
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    async function loadAdminPhotos() {
+      const grid = document.getElementById('adminPhotoGrid');
+      if (!grid) return;
+
+      try {
+        const res = await adminFetch('/api/admin/photos');
+        const data = await res.json();
+        adminPhotosList = data.photos || [];
+        updateAdminPhotoCounts();
+        filterAdminPhotoCategory(adminCurrentPhotoCategory);
+      } catch (err) {
+        if (err.message !== 'UNAUTHORIZED') {
+          grid.innerHTML = '<div class="col-span-full py-12 text-center text-rose-500 text-xs font-bold">載入相簿相片失敗，請重新整理</div>';
+        }
+      }
+    }
+
+    function updateAdminPhotoCounts() {
+      const counts = {
+        '全部': adminPhotosList.length,
+        '診所環境與候診': 0,
+        '獨立徒手治療室': 0,
+        '運動訓練與動作控制': 0,
+        '高端設備（震波）': 0
+      };
+
+      adminPhotosList.forEach(p => {
+        if (counts[p.category] !== undefined) {
+          counts[p.category]++;
+        }
+      });
+
+      const countAll = document.getElementById('countAdminPhoto-all');
+      const countEnv = document.getElementById('countAdminPhoto-env');
+      const countRoom = document.getElementById('countAdminPhoto-room');
+      const countExercise = document.getElementById('countAdminPhoto-exercise');
+      const countDevice = document.getElementById('countAdminPhoto-device');
+
+      if (countAll) countAll.textContent = counts['全部'];
+      if (countEnv) countEnv.textContent = counts['診所環境與候診'];
+      if (countRoom) countRoom.textContent = counts['獨立徒手治療室'];
+      if (countExercise) countExercise.textContent = counts['運動訓練與動作控制'];
+      if (countDevice) countDevice.textContent = counts['高端設備（震波）'];
+    }
+
+    function filterAdminPhotoCategory(category) {
+      adminCurrentPhotoCategory = category;
+
+      const catButtons = [
+        { id: 'btnAdminPhotoCat-all', name: '全部' },
+        { id: 'btnAdminPhotoCat-env', name: '診所環境與候診' },
+        { id: 'btnAdminPhotoCat-room', name: '獨立徒手治療室' },
+        { id: 'btnAdminPhotoCat-exercise', name: '運動訓練與動作控制' },
+        { id: 'btnAdminPhotoCat-device', name: '高端設備（震波）' }
+      ];
+
+      catButtons.forEach(btnInfo => {
+        const btn = document.getElementById(btnInfo.id);
+        if (btn) {
+          if (btnInfo.name === category) {
+            btn.className = 'px-3.5 py-1.5 rounded-xl font-bold bg-pine-700 text-white shadow-xs transition whitespace-nowrap cursor-pointer';
+          } else {
+            btn.className = 'px-3.5 py-1.5 rounded-xl text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 font-medium transition whitespace-nowrap cursor-pointer';
+          }
+        }
+      });
+
+      renderAdminPhotos();
+    }
+
+    function renderAdminPhotos() {
+      const grid = document.getElementById('adminPhotoGrid');
+      if (!grid) return;
+
+      const filtered = adminCurrentPhotoCategory === '全部'
+        ? adminPhotosList
+        : adminPhotosList.filter(p => p.category === adminCurrentPhotoCategory);
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full py-16 text-center text-slate-400 bg-white rounded-2xl border border-slate-200 space-y-3">
+            <i data-lucide="image" class="w-10 h-10 mx-auto text-slate-300"></i>
+            <div class="text-sm font-bold text-slate-600">目前尚無此分類照片</div>
+            <p class="text-xs text-slate-400">點擊上方「新增相片 / 實景照片」即可上傳或輸入網址</p>
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      grid.innerHTML = filtered.map(photo => `
+        <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition flex flex-col justify-between">
+          <div>
+            <div class="relative aspect-video bg-slate-100 overflow-hidden">
+              <img src="${escapeHtml(photo.image_url)}" alt="${escapeHtml(photo.title)}" class="w-full h-full object-cover select-none" loading="lazy">
+              <span class="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/95 text-pine-800 shadow-xs border border-pine-100 backdrop-blur-xs">
+                ${escapeHtml(photo.category)}
+              </span>
+              <span class="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-slate-900/70 text-white backdrop-blur-xs">
+                排序: ${photo.order_num !== undefined ? photo.order_num : 0}
+              </span>
+            </div>
+            <div class="p-4 space-y-1.5">
+              <h4 class="font-bold text-sm text-slate-900 line-clamp-1">${escapeHtml(photo.title)}</h4>
+              <p class="text-xs text-slate-500 line-clamp-2 leading-relaxed">${escapeHtml(photo.description || '無描述說明')}</p>
+              <div class="text-[11px] text-slate-400 pt-1 font-mono">建立時間: ${escapeHtml(photo.created_at || '-')}</div>
+            </div>
+          </div>
+          <div class="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+            <a href="${escapeHtml(photo.image_url)}" target="_blank" class="text-xs text-pine-700 hover:text-pine-800 font-medium inline-flex items-center gap-1">
+              <i data-lucide="external-link" class="w-3.5 h-3.5"></i> 檢視原圖
+            </a>
+            <button type="button" onclick="deleteAdminPhoto('${photo.id}', '${escapeHtml(photo.title)}')" class="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-lg border border-rose-200 transition flex items-center gap-1 cursor-pointer">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 刪除相片
+            </button>
+          </div>
+        </div>
+      `).join('');
+
+      lucide.createIcons();
+    }
+
+    function openAddPhotoModal() {
+      document.getElementById('formAddPhoto').reset();
+      currentPhotoBase64 = '';
+      document.getElementById('photoUploadPrompt').classList.remove('hidden');
+      document.getElementById('photoPreviewContainer').classList.add('hidden');
+      document.getElementById('photoPreviewImg').src = '';
+      document.getElementById('photoUrlPreviewContainer').classList.add('hidden');
+      document.getElementById('photoUrlPreviewImg').src = '';
+      togglePhotoSourceMode();
+      document.getElementById('modalAddPhoto').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeAddPhotoModal() {
+      document.getElementById('modalAddPhoto').classList.add('hidden');
+    }
+
+    function togglePhotoSourceMode() {
+      const mode = document.querySelector('input[name="photoSourceMode"]:checked')?.value || 'file';
+      const fileSec = document.getElementById('photoFileInputSection');
+      const urlSec = document.getElementById('photoUrlInputSection');
+
+      if (mode === 'file') {
+        fileSec.classList.remove('hidden');
+        urlSec.classList.add('hidden');
+      } else {
+        fileSec.classList.add('hidden');
+        urlSec.classList.remove('hidden');
+      }
+      lucide.createIcons();
+    }
+
+    function handlePhotoFileSelected(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const MAX_DIM = 1200;
+          let width = img.width;
+          let height = img.height;
+          if (width > MAX_DIM || height > MAX_DIM) {
+            if (width > height) {
+              height = Math.round((height * MAX_DIM) / width);
+              width = MAX_DIM;
+            } else {
+              width = Math.round((width * MAX_DIM) / height);
+              height = MAX_DIM;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+          currentPhotoBase64 = compressedDataUrl;
+
+          const approxKb = Math.round((compressedDataUrl.length * 3) / 4 / 1024);
+
+          document.getElementById('photoUploadPrompt').classList.add('hidden');
+          document.getElementById('photoPreviewContainer').classList.remove('hidden');
+          document.getElementById('photoPreviewImg').src = compressedDataUrl;
+          document.getElementById('photoCompressInfo').textContent = `已自動最佳化壓縮 (${width}x${height}, 約 ${approxKb} KB)`;
+          lucide.createIcons();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function handlePhotoUrlInput(url) {
+      const trimmed = url.trim();
+      const preview = document.getElementById('photoUrlPreviewContainer');
+      const img = document.getElementById('photoUrlPreviewImg');
+      if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        img.src = trimmed;
+        preview.classList.remove('hidden');
+      } else {
+        preview.classList.add('hidden');
+      }
+    }
+
+    async function submitAddPhoto(event) {
+      event.preventDefault();
+
+      const mode = document.querySelector('input[name="photoSourceMode"]:checked')?.value || 'file';
+      let imageUrl = '';
+
+      if (mode === 'file') {
+        if (!currentPhotoBase64) {
+          alert('請先選擇照片或拍攝照片！');
+          return;
+        }
+        imageUrl = currentPhotoBase64;
+      } else {
+        const urlVal = (document.getElementById('photoUrlInput').value || '').trim();
+        if (!urlVal) {
+          alert('請輸入圖片網址 (URL)！');
+          return;
+        }
+        imageUrl = urlVal;
+      }
+
+      const title = (document.getElementById('addPhotoTitle').value || '').trim();
+      const category = document.getElementById('addPhotoCategory').value;
+      const description = (document.getElementById('addPhotoDesc').value || '').trim();
+      const orderNum = parseInt(document.getElementById('addPhotoOrder').value, 10) || 0;
+
+      if (!title) {
+        alert('請填寫照片標題！');
+        return;
+      }
+
+      const btn = document.getElementById('btnSubmitAddPhoto');
+      btn.disabled = true;
+      btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> 上傳儲存中...';
+      lucide.createIcons();
+
+      try {
+        const res = await adminFetch('/api/admin/photos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title,
+            category,
+            description,
+            image_url: imageUrl,
+            order_num: orderNum
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('✅ 照片已成功新增上傳！前台「關於青松」已同步更新。');
+          closeAddPhotoModal();
+          loadAdminPhotos();
+        } else {
+          alert('新增失敗: ' + (data.error || '未知錯誤'));
+        }
+      } catch (err) {
+        if (err.message !== 'UNAUTHORIZED') {
+          alert('伺服器連線失敗，請再試一次');
+        }
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i> <span>確認上傳新增</span>';
+        lucide.createIcons();
+      }
+    }
+
+    async function deleteAdminPhoto(photoId, photoTitle) {
+      if (!confirm(`確定要刪除照片「${photoTitle}」嗎？\n刪除後前台將不再展示此照片。`)) {
+        return;
+      }
+
+      try {
+        const res = await adminFetch(`/api/admin/photos/${photoId}/delete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('✅ 照片已成功刪除');
+          loadAdminPhotos();
+        } else {
+          alert('刪除失敗: ' + (data.error || '未知錯誤'));
+        }
+      } catch (err) {
+        if (err.message !== 'UNAUTHORIZED') {
+          alert('操作失敗，請稍候重試');
+        }
       }
     }
   </script>

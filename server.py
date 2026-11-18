@@ -214,6 +214,10 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.api_get_therapists()
         elif path == "/api/services":
             self.api_get_services()
+        elif path == "/api/photos":
+            self.api_get_photos(query)
+        elif path == "/api/admin/photos":
+            self.api_admin_get_photos()
         elif path == "/api/settings":
             self.api_get_settings()
         elif path == "/api/patient":
@@ -285,6 +289,11 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.api_admin_update_booking_rules(body)
         elif path == "/api/admin/line-config":
             self.api_admin_update_line_config(body)
+        elif path == "/api/admin/photos":
+            self.api_admin_create_photo(body)
+        elif path.startswith("/api/admin/photos/") and path.endswith("/delete"):
+            photo_id = path.split("/")[4]
+            self.api_admin_delete_photo(photo_id)
         elif path == "/api/reminders/check-and-send":
             self.api_trigger_reminders(body)
         elif path == "/api/line/webhook":
@@ -1557,6 +1566,100 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             conn.rollback()
             self.send_json({"error": f"更新 LINE 設定失敗: {str(e)}"}, status=500)
+        finally:
+            conn.close()
+
+    # --- Clinic Photos & Gallery Management ---
+    def api_get_photos(self, query):
+        category = query.get("category", [""])[0].strip()
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        if category and category != "全部":
+            cursor.execute("""
+                SELECT id, title, category, description, image_url, order_num, created_at
+                FROM clinic_photos
+                WHERE is_active = 1 AND category = ?
+                ORDER BY order_num ASC, created_at DESC
+            """, (category,))
+        else:
+            cursor.execute("""
+                SELECT id, title, category, description, image_url, order_num, created_at
+                FROM clinic_photos
+                WHERE is_active = 1
+                ORDER BY order_num ASC, created_at DESC
+            """)
+        photos = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        self.send_json({"photos": photos})
+
+    def api_admin_get_photos(self):
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, title, category, description, image_url, order_num, is_active, created_at
+            FROM clinic_photos
+            ORDER BY order_num ASC, created_at DESC
+        """)
+        photos = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        self.send_json({"photos": photos})
+
+    def api_admin_create_photo(self, body):
+        title = (body.get("title") or "").strip()
+        category = (body.get("category") or "").strip() or "診所環境與候診"
+        description = (body.get("description") or "").strip()
+        image_url = (body.get("image_url") or "").strip()
+        try:
+            order_num = int(body.get("order_num") or 0)
+        except (ValueError, TypeError):
+            order_num = 0
+
+        if not title:
+            self.send_json({"error": "請填寫照片標題"}, status=400)
+            return
+        if not image_url:
+            self.send_json({"error": "請上傳照片或提供圖片網址"}, status=400)
+            return
+
+        photo_id = "photo_" + uuid.uuid4().hex[:8]
+        now_str = taiwan_now().strftime("%Y-%m-%d %H:%M:%S")
+
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO clinic_photos (id, title, category, description, image_url, order_num, is_active, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+            """, (photo_id, title, category, description, image_url, order_num, now_str))
+            conn.commit()
+            self.send_json({
+                "success": True,
+                "photo": {
+                    "id": photo_id,
+                    "title": title,
+                    "category": category,
+                    "description": description,
+                    "image_url": image_url,
+                    "order_num": order_num,
+                    "created_at": now_str
+                }
+            })
+        except Exception as e:
+            conn.rollback()
+            self.send_json({"error": f"新增照片失敗: {str(e)}"}, status=500)
+        finally:
+            conn.close()
+
+    def api_admin_delete_photo(self, photo_id):
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM clinic_photos WHERE id = ?", (photo_id,))
+            conn.commit()
+            self.send_json({"success": True, "deleted_id": photo_id})
+        except Exception as e:
+            conn.rollback()
+            self.send_json({"error": f"刪除照片失敗: {str(e)}"}, status=500)
         finally:
             conn.close()
 

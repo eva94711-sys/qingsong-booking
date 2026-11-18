@@ -804,6 +804,51 @@
             </a>
           </div>
         </div>
+
+        <!-- 診所實景與專業設備導覽相簿專區 -->
+        <div class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
+            <div class="flex items-center space-x-2.5">
+              <div class="w-8 h-8 rounded-xl bg-pine-100 text-pine-800 flex items-center justify-center">
+                <i data-lucide="camera" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h3 class="text-base font-bold text-slate-900">診所實景與專業設備導覽</h3>
+                <p class="text-xs text-slate-500">透明公開的治療環境，營造安心專業的就診體驗</p>
+              </div>
+            </div>
+            <span class="text-[11px] text-pine-700 bg-pine-50 border border-pine-200 px-2.5 py-1 rounded-full font-medium self-start sm:self-auto">
+              點擊照片可放大檢視
+            </span>
+          </div>
+
+          <!-- 分類切換按鈕 (四大核心分類) -->
+          <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs hide-scrollbar">
+            <button type="button" onclick="filterGalleryCategory('全部')" id="btnPhotoCat-all" class="px-3 py-1.5 rounded-xl font-bold bg-pine-700 text-white shadow-xs transition whitespace-nowrap cursor-pointer">
+              全部展示
+            </button>
+            <button type="button" onclick="filterGalleryCategory('診所環境與候診')" id="btnPhotoCat-env" class="px-3 py-1.5 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 font-medium transition whitespace-nowrap cursor-pointer">
+              診所環境與候診
+            </button>
+            <button type="button" onclick="filterGalleryCategory('獨立徒手治療室')" id="btnPhotoCat-room" class="px-3 py-1.5 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 font-medium transition whitespace-nowrap cursor-pointer">
+              獨立徒手治療室
+            </button>
+            <button type="button" onclick="filterGalleryCategory('運動訓練與動作控制')" id="btnPhotoCat-exercise" class="px-3 py-1.5 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 font-medium transition whitespace-nowrap cursor-pointer">
+              運動訓練與動作控制
+            </button>
+            <button type="button" onclick="filterGalleryCategory('高端設備（震波）')" id="btnPhotoCat-device" class="px-3 py-1.5 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 font-medium transition whitespace-nowrap cursor-pointer">
+              高端設備（震波）
+            </button>
+          </div>
+
+          <!-- 照片網格 -->
+          <div id="clinicPhotoGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+            <div class="col-span-full py-10 text-center text-slate-400 text-xs">
+              <i data-lucide="loader-2" class="w-5 h-5 animate-spin mx-auto mb-2 text-pine-600"></i>
+              <span>正在載入診所相簿...</span>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- ================= TAB 2: 治療師專長 (去除學經歷，只留專長) ================= -->
@@ -1094,6 +1139,39 @@
 
     </main>
 
+    <!-- 診所相簿燈箱 (Lightbox Modal) -->
+    <div id="photoLightboxModal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex flex-col justify-between p-4 md:p-6 transition-opacity">
+      <!-- 頂部資訊與關閉按鈕 -->
+      <div class="flex items-center justify-between text-white max-w-4xl mx-auto w-full pb-2">
+        <div class="flex items-center gap-2">
+          <span id="lightboxCategory" class="text-xs px-2.5 py-1 rounded-full bg-pine-600/80 font-medium text-pine-100">診所環境</span>
+          <span id="lightboxCounter" class="text-xs text-slate-300 font-mono">1 / 4</span>
+        </div>
+        <button type="button" onclick="closePhotoLightbox()" class="p-2 rounded-full bg-white/10 hover:bg-white/25 text-white transition cursor-pointer" aria-label="關閉檢視">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- 中間大圖檢視區與左右切換按鈕 -->
+      <div class="relative flex-1 flex items-center justify-center max-w-4xl mx-auto w-full my-auto overflow-hidden">
+        <button type="button" onclick="prevLightboxPhoto()" class="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2.5 rounded-full bg-black/60 hover:bg-black/90 text-white transition backdrop-blur-xs cursor-pointer shadow-lg" aria-label="上一張">
+          <i data-lucide="chevron-left" class="w-6 h-6"></i>
+        </button>
+
+        <img id="lightboxImg" src="" alt="" class="max-h-[68vh] max-w-full object-contain rounded-xl shadow-2xl transition-all duration-200 select-none">
+
+        <button type="button" onclick="nextLightboxPhoto()" class="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2.5 rounded-full bg-black/60 hover:bg-black/90 text-white transition backdrop-blur-xs cursor-pointer shadow-lg" aria-label="下一張">
+          <i data-lucide="chevron-right" class="w-6 h-6"></i>
+        </button>
+      </div>
+
+      <!-- 底部相片標題與詳細說明 -->
+      <div class="max-w-4xl mx-auto w-full bg-white/10 backdrop-blur-md rounded-2xl p-4 text-white space-y-1 mt-2 border border-white/10">
+        <h4 id="lightboxTitle" class="text-base font-bold text-white tracking-wide">相片標題</h4>
+        <p id="lightboxDesc" class="text-xs text-slate-200 leading-relaxed font-normal">相片說明文字</p>
+      </div>
+    </div>
+
     <!-- Bottom Navigation Bar (Visible on mobile only, hidden on md) -->
     <nav id="mainBottomNav" class="md:hidden fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-slate-200 z-40 pb-safe">
       <div class="grid grid-cols-6 py-2">
@@ -1166,6 +1244,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   generateDateList();
   checkPatientMemory();
   loadMyAppointments();
+  loadClinicPhotos();
 });
 
 // --- Dynamic Clinic & LINE Settings ---
@@ -1647,6 +1726,9 @@ function switchTab(tabId) {
 
   if (tabId === 'mybookings') {
     loadMyAppointments();
+  }
+  if (tabId === 'intro') {
+    loadClinicPhotos();
   }
 
   lucide.createIcons();
@@ -2651,6 +2733,167 @@ async function cancelAppointment(aptId) {
     alert('取消失敗，請再試一次');
   }
 }
+
+// --- 診所相簿與實景導覽 (Clinic Photos & Gallery) ---
+let allClinicPhotos = [];
+let currentGalleryCategory = '全部';
+let currentFilteredPhotos = [];
+let currentLightboxIndex = 0;
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+async function loadClinicPhotos() {
+  const grid = document.getElementById('clinicPhotoGrid');
+  if (!grid) return;
+  try {
+    const res = await fetch('/api/photos');
+    const data = await res.json();
+    if (data.photos && Array.isArray(data.photos)) {
+      allClinicPhotos = data.photos;
+      filterGalleryCategory(currentGalleryCategory);
+    }
+  } catch (err) {
+    console.error('載入診所相簿失敗:', err);
+    if (grid) {
+      grid.innerHTML = '<div class="col-span-full py-8 text-center text-slate-400 text-xs">相簿載入中，請稍候重試</div>';
+    }
+  }
+}
+
+function filterGalleryCategory(category) {
+  currentGalleryCategory = category;
+
+  // 更新分類按鈕樣式
+  const catButtons = [
+    { id: 'btnPhotoCat-all', name: '全部' },
+    { id: 'btnPhotoCat-env', name: '診所環境與候診' },
+    { id: 'btnPhotoCat-room', name: '獨立徒手治療室' },
+    { id: 'btnPhotoCat-exercise', name: '運動訓練與動作控制' },
+    { id: 'btnPhotoCat-device', name: '高端設備（震波）' }
+  ];
+
+  catButtons.forEach(btnInfo => {
+    const btn = document.getElementById(btnInfo.id);
+    if (btn) {
+      if (btnInfo.name === category) {
+        btn.className = 'px-3 py-1.5 rounded-xl font-bold bg-pine-700 text-white shadow-xs transition whitespace-nowrap cursor-pointer';
+      } else {
+        btn.className = 'px-3 py-1.5 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 font-medium transition whitespace-nowrap cursor-pointer';
+      }
+    }
+  });
+
+  // 篩選相片
+  if (category === '全部') {
+    currentFilteredPhotos = [...allClinicPhotos];
+  } else {
+    currentFilteredPhotos = allClinicPhotos.filter(p => p.category === category);
+  }
+
+  renderClinicPhotos();
+}
+
+function renderClinicPhotos() {
+  const grid = document.getElementById('clinicPhotoGrid');
+  if (!grid) return;
+
+  if (currentFilteredPhotos.length === 0) {
+    grid.innerHTML = `
+      <div class="col-span-full py-12 text-center text-slate-400 space-y-2">
+        <i data-lucide="image-off" class="w-8 h-8 mx-auto text-slate-300"></i>
+        <div class="text-xs">此分類目前尚無實景照片</div>
+      </div>
+    `;
+    lucide.createIcons();
+    return;
+  }
+
+  grid.innerHTML = currentFilteredPhotos.map((photo, idx) => `
+    <div onclick="openPhotoLightbox(${idx})" class="group cursor-pointer rounded-2xl overflow-hidden border border-slate-200 bg-white hover:shadow-md transition-all duration-300 flex flex-col">
+      <div class="relative aspect-video overflow-hidden bg-slate-100">
+        <img src="${escapeHtml(photo.image_url)}" alt="${escapeHtml(photo.title)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 select-none" loading="lazy">
+        <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
+          <span class="text-xs text-white flex items-center gap-1 font-medium"><i data-lucide="zoom-in" class="w-3.5 h-3.5"></i> 點擊放大檢視</span>
+        </div>
+        <span class="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/95 backdrop-blur-xs text-pine-800 shadow-xs border border-pine-100">
+          ${escapeHtml(photo.category)}
+        </span>
+      </div>
+      <div class="p-3.5 flex-1 flex flex-col justify-between">
+        <div>
+          <h4 class="text-sm font-bold text-slate-900 group-hover:text-pine-700 transition">${escapeHtml(photo.title)}</h4>
+          ${photo.description ? `<p class="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">${escapeHtml(photo.description)}</p>` : ''}
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  lucide.createIcons();
+}
+
+function openPhotoLightbox(index) {
+  if (!currentFilteredPhotos || currentFilteredPhotos.length === 0) return;
+  currentLightboxIndex = index;
+  updateLightboxContent();
+  const modal = document.getElementById('photoLightboxModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closePhotoLightbox() {
+  const modal = document.getElementById('photoLightboxModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function prevLightboxPhoto() {
+  if (!currentFilteredPhotos || currentFilteredPhotos.length === 0) return;
+  currentLightboxIndex = (currentLightboxIndex - 1 + currentFilteredPhotos.length) % currentFilteredPhotos.length;
+  updateLightboxContent();
+}
+
+function nextLightboxPhoto() {
+  if (!currentFilteredPhotos || currentFilteredPhotos.length === 0) return;
+  currentLightboxIndex = (currentLightboxIndex + 1) % currentFilteredPhotos.length;
+  updateLightboxContent();
+}
+
+function updateLightboxContent() {
+  const photo = currentFilteredPhotos[currentLightboxIndex];
+  if (!photo) return;
+
+  const img = document.getElementById('lightboxImg');
+  const cat = document.getElementById('lightboxCategory');
+  const counter = document.getElementById('lightboxCounter');
+  const title = document.getElementById('lightboxTitle');
+  const desc = document.getElementById('lightboxDesc');
+
+  if (img) {
+    img.src = photo.image_url;
+    img.alt = photo.title;
+  }
+  if (cat) cat.textContent = photo.category || '診所環境';
+  if (counter) counter.textContent = `${currentLightboxIndex + 1} / ${currentFilteredPhotos.length}`;
+  if (title) title.textContent = photo.title || '';
+  if (desc) desc.textContent = photo.description || '';
+  lucide.createIcons();
+}
+
+// 監聽鍵盤 ESC 與左右鍵支援相簿輪播
+document.addEventListener('keydown', (e) => {
+  const modal = document.getElementById('photoLightboxModal');
+  if (modal && !modal.classList.contains('hidden')) {
+    if (e.key === 'Escape') closePhotoLightbox();
+    else if (e.key === 'ArrowLeft') prevLightboxPhoto();
+    else if (e.key === 'ArrowRight') nextLightboxPhoto();
+  }
+});
 
 </script>
 </body>
