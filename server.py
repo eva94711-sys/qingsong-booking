@@ -238,6 +238,8 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.api_admin_get_stats()
         elif path == "/api/admin/schedule-config":
             self.api_admin_get_schedule_config()
+        elif path == "/api/admin/quick-lock/status":
+            self.api_admin_get_quick_lock_status(query)
         elif path == "/api/admin/export":
             self.api_admin_export_csv(query)
         elif path == "/api/reminders/check-and-send":
@@ -289,6 +291,8 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.api_admin_update_booking_rules(body)
         elif path == "/api/admin/line-config":
             self.api_admin_update_line_config(body)
+        elif path == "/api/admin/quick-lock/toggle":
+            self.api_admin_quick_lock_toggle(body)
         elif path == "/api/admin/photos":
             self.api_admin_create_photo(body)
         elif path.startswith("/api/admin/photos/") and path.endswith("/delete"):
@@ -1427,6 +1431,206 @@ class QingsongRequestHandler(http.server.SimpleHTTPRequestHandler):
         conn.close()
         invalidate_schedule_cache()
         self.send_json({"success": True, "deleted_id": ov_id})
+
+    def api_admin_get_quick_lock_status(self, query):
+        date_str = (query.get("date", [""])[0] or "").strip()
+        if not date_str:
+            date_str = taiwan_now().strftime("%Y-%m-%d")
+        try:
+            date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            self.send_json({"error": "日期格式錯誤，請使用 YYYY-MM-DD"}, status=400)
+            return
+
+        therapist_id = (query.get("therapist_id", [""])[0] or "").strip() or "th_liu"
+        if therapist_id not in ("th_liu", "th_hong", "both"):
+            therapist_id = "th_liu"
+
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        try:
+            standard_slots, weekly_schedules, _ = self.get_clinic_schedule_config(cursor)
+
+            cursor.execute("""
+                SELECT id, date, time_slot, therapist_id, is_available, reason
+                FROM schedule_overrides
+                WHERE date = ?
+            """, (date_str,))
+            overrides_for_date = cursor.fetchall()
+
+            cursor.execute("""
+                SELECT id, appointment_time, therapist_id, therapist_name, 
+                       patient_name, patient_phone, visit_type, status
+                FROM appointments
+                WHERE appointment_date = ? AND status != 'CANCELLED'
+            """, (date_str,))
+            apts_for_date = cursor.fetchall()
+        finally:
+            conn.close()
+
+        slots_result = []
+        target_tids = ["th_liu", "th_hong"] if therapist_id == "both" else [therapist_id]
+
+        for s in standard_slots:
+            booked_apts = [a for a in apts_for_date if a["appointment_time"] == s and a["therapist_id"] in target_tids]
+
+            if booked_apts:
+                apt = booked_apts[0]
+                slots_result.append({
+                    "time": s,
+                    "status": "booked",
+                    "can_lock": False,
+                    "can_unlock": False,
+                    "patient_name": apt["patient_name"],
+                    "patient_phone": apt["patient_phone"],
+                    "visit_type": apt["visit_type"],
+                    "therapist_name": apt["therapist_name"],
+                    "appointment_id": apt["id"],
+                    "booked_count": len(booked_apts)
+                })
+                continue
+
+            open_count = 0
+            closed_reasons = []
+            for tid in target_tids:
+                open_s, c_reason = self.compute_therapist_open_slots(
+                    tid, date_obj, standard_slots, weekly_schedules, overrides_for_date
+                )
+                if s in open_s:
+                    open_count += 1
+                else:
+                    if c_reason:
+                        closed_reasons.append(c_reason)
+
+            if open_count > 0:
+                slots_result.append({
+                    "time": s,
+                    "status": "available",
+                    "can_lock": True,
+                    "can_unlock": False,
+                    "open_therapists_count": open_count
+                })
+            else:
+                reason = closed_reasons[0] if closed_reasons else "臨時排班調整"
+                slots_result.append({
+                    "time": s,
+                    "status": "locked",
+                    "can_lock": False,
+                    "can_unlock": True,
+                    "reason": reason
+                })
+
+        self.send_json({
+            "success": True,
+            "date": date_str,
+            "therapist_id": therapist_id,
+            "slots": slots_result
+        })
+
+    def api_admin_quick_lock_toggle(self, body):
+        date_str = (body.get("date") or "").strip()
+        time_slot = (body.get("time_slot") or "").strip()
+        therapist_id = (body.get("therapist_id") or "").strip() or "th_liu"
+        action = (body.get("action") or "lock").strip().lower()
+        reason = (body.get("reason") or "臨時排班調整").strip()
+
+        if not date_str or not time_slot:
+            self.send_json({"error": "請提供欲操作之看診日期與時段"}, status=400)
+            return
+
+        try:
+            datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            self.send_json({"error": "日期格式錯誤，請使用 YYYY-MM-DD"}, status=400)
+            return
+
+        if therapist_id not in ("th_liu", "th_hong", "both"):
+            self.send_json({"error": "無效的治療師識別"}, status=400)
+            return
+
+        target_tids = ["th_liu", "th_hong"] if therapist_id == "both" else [therapist_id]
+
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        now_str = taiwan_now().strftime("%Y-%m-%d %H:%M:%S")
+
+        try:
+            if action == "lock":
+                # Strict safeguard: ensure no active appointments at this slot
+                placeholders = ",".join("?" for _ in target_tids)
+                cursor.execute(f"""
+                    SELECT patient_name, therapist_name, appointment_time
+                    FROM appointments
+                    WHERE appointment_date = ? AND appointment_time = ? AND therapist_id IN ({placeholders}) AND status != 'CANCELLED'
+                """, [date_str, time_slot] + target_tids)
+                existing = cursor.fetchall()
+                if existing:
+                    p_name = existing[0]["patient_name"]
+                    t_name = existing[0]["therapist_name"]
+                    conn.rollback()
+                    self.send_json({
+                        "error": f"【嚴格防呆保護】該時段已有病患（{p_name}）向 {t_name} 預約！為維護醫病信任，禁止直接覆蓋鎖定。若需休診，請先在下方名冊與病患聯繫或取消該筆預約。"
+                    }, status=400)
+                    return
+
+                for tid in target_tids:
+                    cursor.execute("""
+                        DELETE FROM schedule_overrides
+                        WHERE therapist_id = ? AND date = ? AND time_slot = ?
+                    """, (tid, date_str, time_slot))
+
+                    ov_id = "OV_QL_" + taiwan_now().strftime("%Y%m%d%H%M%S") + uuid.uuid4().hex[:4].upper()
+                    cursor.execute("""
+                        INSERT INTO schedule_overrides (id, therapist_id, date, time_slot, is_available, reason, created_at)
+                        VALUES (?, ?, ?, ?, 0, ?, ?)
+                    """, (ov_id, tid, date_str, time_slot, reason, now_str))
+
+                conn.commit()
+                invalidate_schedule_cache()
+                self.send_json({
+                    "success": True,
+                    "action": "locked",
+                    "date": date_str,
+                    "time_slot": time_slot,
+                    "therapist_id": therapist_id,
+                    "message": f"{time_slot} 時段已成功快速鎖定！線上預約已同步停止開放。"
+                })
+
+            elif action == "unlock":
+                for tid in target_tids:
+                    cursor.execute("""
+                        DELETE FROM schedule_overrides
+                        WHERE therapist_id = ? AND date = ? AND time_slot = ?
+                    """, (tid, date_str, time_slot))
+
+                    cursor.execute("""
+                        SELECT id FROM schedule_overrides
+                        WHERE (therapist_id = ? OR therapist_id = 'all') AND date = ? AND (time_slot IS NULL OR time_slot = '' OR time_slot = 'ALL') AND is_available = 0
+                    """, (tid, date_str))
+                    if cursor.fetchone():
+                        ov_id = "OV_QL_OP_" + taiwan_now().strftime("%Y%m%d%H%M%S") + uuid.uuid4().hex[:4].upper()
+                        cursor.execute("""
+                            INSERT INTO schedule_overrides (id, therapist_id, date, time_slot, is_available, reason, created_at)
+                            VALUES (?, ?, ?, ?, 1, '治療師即時開放時段', ?)
+                        """, (ov_id, tid, date_str, time_slot, now_str))
+
+                conn.commit()
+                invalidate_schedule_cache()
+                self.send_json({
+                    "success": True,
+                    "action": "unlocked",
+                    "date": date_str,
+                    "time_slot": time_slot,
+                    "therapist_id": therapist_id,
+                    "message": f"{time_slot} 時段已解除鎖定，即刻恢復線上預約！"
+                })
+            else:
+                self.send_json({"error": "無效的動作，僅支援 lock 或 unlock"}, status=400)
+        except Exception as e:
+            conn.rollback()
+            self.send_json({"error": f"操作失敗: {str(e)}"}, status=500)
+        finally:
+            conn.close()
 
     def api_admin_update_weekly_schedule(self, body):
         therapist_id = (body.get("therapist_id") or "").strip()
