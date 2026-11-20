@@ -321,17 +321,59 @@
                       <span>線上預約免上傳照片，<strong>就診當日請務必攜帶轉診單／照會單正本</strong>前來。</span>
                     </div>
 
-                    <!-- 當勾選【無】時的強烈法規阻擋提示 -->
-                    <div id="referralNoAlert" class="hidden mt-2.5 text-xs text-rose-900 bg-rose-50 border-2 border-rose-300 p-3.5 rounded-xl space-y-1.5">
-                      <div class="font-bold flex items-center gap-1.5 text-rose-700 text-sm">
-                        <i data-lucide="alert-octagon" class="w-4 h-4 flex-shrink-0"></i>
-                        依物理治療法規規定：無照會單恕無法進行看診
+                    <!-- 當勾選【無】時的法規提示與友善配合診所指引 -->
+                    <div id="referralNoAlert" class="hidden mt-2.5 text-xs text-slate-700 bg-amber-50/80 border-2 border-amber-300 p-3.5 md:p-4 rounded-2xl space-y-3">
+                      <div class="font-bold flex items-center gap-1.5 text-amber-900 text-sm">
+                        <i data-lucide="alert-circle" class="w-4 h-4 text-amber-700 flex-shrink-0"></i>
+                        <span>法規溫馨提醒：初診就診需備妥醫師照會單</span>
                       </div>
-                      <p class="text-slate-600 leading-relaxed">
-                        物理治療屬醫療業務，依《物理治療師法》規範，物理治療門診初診<strong>必須持有醫院或診所開立之醫師照會單／轉診單</strong>方可進行看診處置。
+                      <p class="text-slate-600 leading-relaxed text-xs">
+                        物理治療屬專業醫療業務，依《物理治療師法》規範，初診<strong>需持有各醫療院所（西醫骨科、復健科、神經科或疼痛科等）開立之醫師照會單／轉診單</strong>方可進行物理治療看診處置。
                       </p>
-                      <p class="text-rose-700 font-medium">
-                        👉 請先至醫院或診所經醫師診斷並取得照會單／轉診單後，再行預約物理治療看診（如有疑問歡迎致電 07-7353353 或透過 LINE @557fabgw 洽詢）。
+
+                      <!-- 合作配合院所參考卡片 (友善指引，非強迫) -->
+                      <div class="bg-white p-3.5 rounded-xl border border-amber-200 shadow-sm space-y-2">
+                        <div class="flex items-center justify-between flex-wrap gap-1">
+                          <span class="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                            <i data-lucide="building-2" class="w-3.5 h-3.5 text-pine-700"></i>
+                            <span>若您尚未就醫、不清楚去哪開單？配合院所參考：</span>
+                          </span>
+                          <span class="text-[10px] bg-pine-100 text-pine-800 px-2 py-0.5 rounded-full font-bold">青松配合診所</span>
+                        </div>
+
+                        <div class="space-y-1 text-slate-600 text-xs leading-relaxed">
+                          <div class="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                            <span>喬立診所</span>
+                            <span class="text-[11px] text-slate-500 font-normal">（疼痛與再生醫學專科）</span>
+                          </div>
+                          <p class="text-slate-500 text-[11px]">主打增生注射、運動傷害及慢性疼痛根因治療，看診時可向醫師說明需開立物理治療照會單。</p>
+                          <div class="pt-0.5 flex flex-col sm:flex-row gap-1 sm:gap-4 text-slate-500 text-[11px]">
+                            <span class="flex items-center gap-1">
+                              <i data-lucide="map-pin" class="w-3 h-3 text-slate-400"></i>
+                              <span>高雄市苓雅區青年一路111-1號</span>
+                            </span>
+                            <span class="flex items-center gap-1">
+                              <i data-lucide="phone" class="w-3 h-3 text-slate-400"></i>
+                              <span>(07) 338-9990</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        <!-- 快捷按鈕 -->
+                        <div class="pt-1 flex items-center gap-2">
+                          <a href="tel:073389990" class="flex-1 py-1.5 px-3 bg-pine-50 hover:bg-pine-100 text-pine-800 border border-pine-200 rounded-lg text-xs font-bold text-center flex items-center justify-center gap-1 transition">
+                            <i data-lucide="phone-call" class="w-3 h-3 text-pine-700"></i>
+                            <span>致電喬立診所諮詢</span>
+                          </a>
+                          <a href="https://maps.google.com/?q=喬立診所+高雄市苓雅區青年一路111-1號" target="_blank" rel="noopener noreferrer" class="flex-1 py-1.5 px-3 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold text-center flex items-center justify-center gap-1 transition">
+                            <i data-lucide="navigation" class="w-3 h-3 text-slate-500"></i>
+                            <span>地圖導航</span>
+                          </a>
+                        </div>
+                      </div>
+
+                      <p class="text-[11px] text-slate-500">
+                        ※ 您亦可持<strong>任何其他醫院或診所</strong>開立之照會單／轉診單前來，就診前備妥單據即可隨時於線上完成預約！如有疑問亦可致電青松（07-7353353）洽詢。
                       </p>
                     </div>
                   </div>
@@ -1948,10 +1990,13 @@ function onReferralChange() {
     if (noAlert) noAlert.classList.add('hidden');
     setStep1NextAllowed(true);
   } else {
-    // 沒有照會單 → 嚴格阻擋！
+    // 沒有照會單 → 顯示溫馨提醒與配合診所指引，並引導備妥單據
     if (yesTip) yesTip.classList.add('hidden');
-    if (noAlert) noAlert.classList.remove('hidden');
-    setStep1NextAllowed(false, '無照會單無法進行看診');
+    if (noAlert) {
+      noAlert.classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    }
+    setStep1NextAllowed(false, '備妥照會單後即可預約門診');
   }
 }
 
